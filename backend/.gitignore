@@ -1,0 +1,8 @@
+config/config.env
+
+# dependencies
+/node_modules
+
+customerportal-305809-9acc08166152.json
+customerportal-305809-22f0214571b3.json
+customerportal-305809-186c26a2d728.json
