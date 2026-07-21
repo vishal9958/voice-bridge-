@@ -49,6 +49,33 @@ function makeId(): string {
 // No dummy speakers - only real registered speakers from MongoDB / Firestore will be listed
 const DUMMY_SPEAKERS: User[] = [];
 
+const BACKEND_URLS = [
+  'http://localhost:5000/api',
+  'http://172.20.65.219:5000/api',
+  'http://10.0.2.2:5000/api',
+  'http://192.168.100.183:5000/api',
+];
+
+async function tryBackendFetch(endpoint: string, options: any = {}) {
+  for (const baseUrl of BACKEND_URLS) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2500);
+      const response = await fetch(`${baseUrl}${endpoint}`, {
+        ...options,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (response.status < 500) {
+        return response;
+      }
+    } catch {
+      // try next IP / URL
+    }
+  }
+  return null;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>([]);
@@ -62,7 +89,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const remoteUsers = snapshot.docs.map((d: any) => d.data() as User);
       setUsers((prev) => {
         const map = new Map<string, User>();
-        // Only keep real registered users (filter out any legacy SPK-00 dummy users)
         prev.filter((u: User) => !u.userId.startsWith('SPK-00')).forEach((u: User) => map.set(u.userId, u));
         remoteUsers.filter((u: User) => !u.userId.startsWith('SPK-00')).forEach((u: User) => map.set(u.userId, u));
         return Array.from(map.values());
@@ -80,7 +106,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       ]);
 
       let allUsers: User[] = usersRaw ? JSON.parse(usersRaw) : [];
-      // Clean up any old dummy speakers saved in AsyncStorage
       allUsers = allUsers.filter((u: User) => !u.userId.startsWith('SPK-00'));
       await AsyncStorage.setItem(USERS_KEY, JSON.stringify(allUsers));
 
@@ -103,49 +128,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
-
-      const response = await fetch('http://192.168.100.183:5000/api/login', {
+      const response = await tryBackendFetch('/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': 'cd6631d9-484b-4805-9cb1-34c7b6cd8209',
         },
-        signal: controller.signal,
         body: JSON.stringify({
           mobile: mobile.trim(),
           accesscode: code.trim(),
           appVersionNumber: 23,
         }),
       });
-      clearTimeout(timeoutId);
 
-      const resData = await response.json();
-      if (response.ok && resData.success) {
-        const apiUser = resData.user || {};
-        const formattedUser: User = {
-          userId: apiUser.speakerID || apiUser._id || makeId(),
-          fullName: apiUser.name || apiUser.fullName || 'Speaker',
-          age: apiUser.age || 25,
-          gender: apiUser.gender || 'Male',
-          state: apiUser.state || '',
-          district: apiUser.district || '',
-          pincode: apiUser.pincode || '',
-          qualification: apiUser.qualification || '',
-          recordingLanguages: apiUser.recordingLanguages || ['Hindi'],
-          knownLanguages: apiUser.knownLanguages || ['Hindi'],
-          consentLanguage: apiUser.consentLanguage || 'Hindi',
-          mobile: apiUser.mobile || mobile.trim(),
-          coordinator: apiUser.coordinatorName || apiUser.coordinator || '',
-          createdAt: apiUser.createdAt || new Date().toISOString(),
-          voiceVerified: apiUser.voiceVerified || false,
-        };
+      if (response) {
+        const resData = await response.json();
+        if (response.ok && resData.success) {
+          const apiUser = resData.user || {};
+          const formattedUser: User = {
+            userId: apiUser.speakerID || apiUser._id || makeId(),
+            fullName: apiUser.name || apiUser.fullName || 'Speaker',
+            age: apiUser.age || 25,
+            gender: apiUser.gender || 'Male',
+            state: apiUser.state || '',
+            district: apiUser.district || '',
+            pincode: apiUser.pincode || '',
+            qualification: apiUser.qualification || '',
+            recordingLanguages: apiUser.recordingLanguages || ['Hindi'],
+            knownLanguages: apiUser.knownLanguages || ['Hindi'],
+            consentLanguage: apiUser.consentLanguage || 'Hindi',
+            mobile: apiUser.mobile || mobile.trim(),
+            coordinator: apiUser.coordinatorName || apiUser.coordinator || '',
+            createdAt: apiUser.createdAt || new Date().toISOString(),
+            voiceVerified: apiUser.voiceVerified || false,
+          };
 
-        await AsyncStorage.setItem(CURRENT_USER_KEY, formattedUser.userId);
-        setCurrentUser(formattedUser);
-        await setDoc(doc(db, 'users', formattedUser.userId), formattedUser, { merge: true }).catch(() => {});
-        return { success: true };
+          await AsyncStorage.setItem(CURRENT_USER_KEY, formattedUser.userId);
+          setCurrentUser(formattedUser);
+          await setDoc(doc(db, 'users', formattedUser.userId), formattedUser, { merge: true }).catch(() => {});
+          return { success: true };
+        }
       }
     } catch (err: any) {
       console.log('Backend API login timeout/fallback...', err?.message);
@@ -172,16 +194,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let createdId = makeId();
 
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
-
-      const response = await fetch('http://192.168.100.183:5000/api/register', {
+      const response = await tryBackendFetch('/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': 'cd6631d9-484b-4805-9cb1-34c7b6cd8209',
         },
-        signal: controller.signal,
         body: JSON.stringify({
           name: data.fullName,
           fullName: data.fullName,
@@ -203,11 +221,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           longitude: 73,
         }),
       });
-      clearTimeout(timeoutId);
 
-      const resData = await response.json();
-      if (resData.user?.speakerID || resData.user?._id) {
-        createdId = resData.user.speakerID || resData.user._id;
+      if (response) {
+        const resData = await response.json();
+        if (resData.user?.speakerID || resData.user?._id || resData.data?._id || resData.data?.speakerID) {
+          createdId = resData.user?.speakerID || resData.user?._id || resData.data?.speakerID || resData.data?._id;
+        }
       }
     } catch (err: any) {
       console.log('Backend API register fallback...', err?.message);
