@@ -57,7 +57,11 @@
     "zod-validation-error": "^3.4.0"
   },
   "dependencies": {
+<<<<<<< HEAD
     "@config-plugins/react-native-webrtc": "^13.0.0",
+=======
+    "@config-plugins/react-native-webrtc": "10.0.0",
+>>>>>>> abdc247b66630abad7c383dc0c0db0f5478f8dd0
     "expo-av": "^16.0.8",
     "firebase": "^12.16.0",
     "react-native-webrtc": "^124.0.6",
