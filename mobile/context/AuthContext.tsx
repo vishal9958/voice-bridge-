@@ -38,15 +38,10 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 const USERS_KEY = 'vb_users';
 const CURRENT_USER_KEY = 'vb_current_user';
-const SEEDED_KEY = 'vb_seeded_v1';
-const ACCESS_CODE = '123456';
 
 function makeId(): string {
   return Date.now().toString() + Math.random().toString(36).substring(2, 9);
 }
-
-// No dummy speakers - only real registered speakers from MongoDB / Firestore will be listed
-const DUMMY_SPEAKERS: User[] = [];
 
 const BACKEND_URLS = [
   'http://localhost:5000/api',
@@ -109,32 +104,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function loadData() {
     try {
-      const [usersRaw, currentId, profileRaw] = await Promise.all([
-        AsyncStorage.getItem(USERS_KEY),
+      const [currentId, profileRaw] = await Promise.all([
         AsyncStorage.getItem(CURRENT_USER_KEY),
         AsyncStorage.getItem('vb_user_profile'),
       ]);
 
-      let allUsers: User[] = usersRaw ? JSON.parse(usersRaw) : [];
-      allUsers = allUsers.filter((u: User) => !u.userId.startsWith('SPK-00'));
-      await AsyncStorage.setItem(USERS_KEY, JSON.stringify(allUsers));
-
-      setUsers(allUsers);
-
       if (profileRaw) {
         setCurrentUser(JSON.parse(profileRaw));
-      } else if (currentId) {
-        const found = allUsers.find((u) => u.userId === currentId);
-        if (found) setCurrentUser(found);
       }
 
       if (currentId) {
-        // Fetch registered speakers list from MongoDB backend in background (try /searchspeaker then fallback to /user/searchspeaker)
+        // Fetch registered speakers list directly from MongoDB Atlas backend
         const fetchSpeakers = async () => {
           let res = await tryBackendFetch('/searchspeaker', { method: 'GET' });
           if (!res || !res.ok) {
             res = await tryBackendFetch('/user/searchspeaker', { method: 'GET' });
           }
+
           if (res && res.ok) {
             const resData = await res.json();
             if (resData.success && Array.isArray(resData.data)) {
@@ -383,8 +369,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (res && res.ok) {
           const resData = await res.json();
           if (resData.success && resData.data) {
-            const apiUser = resData.data;
-            const speaker: User = {
+            const list = Array.isArray(resData.data) ? resData.data : [resData.data];
+            const fetchedSpeakers: User[] = list.map((apiUser: any) => ({
               userId: apiUser.speakerID || apiUser.id || apiUser._id || makeId(),
               fullName: apiUser.name || apiUser.fullName || 'Speaker',
               age: apiUser.age || 25,
@@ -400,12 +386,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               coordinator: apiUser.coordinatorName || apiUser.coordinator || '',
               createdAt: apiUser.createdAt || apiUser.createdOn || new Date().toISOString(),
               voiceVerified: apiUser.voiceVerified !== false,
-            };
+            }));
 
             setUsers((prev) => {
-              const exists = prev.some((u) => u.userId === speaker.userId);
-              if (exists) return prev;
-              const newUsers = [...prev, speaker];
+              const map = new Map<string, User>();
+              prev.forEach((u) => map.set(u.userId, u));
+              fetchedSpeakers.forEach((u) => map.set(u.userId, u));
+              const newUsers = Array.from(map.values());
               AsyncStorage.setItem(USERS_KEY, JSON.stringify(newUsers)).catch(() => {});
               return newUsers;
             });
