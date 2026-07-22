@@ -29,7 +29,7 @@ interface AuthContextType {
   users: User[];
   isLoading: boolean;
   login: (mobile: string, code: string) => Promise<{ success: boolean; error?: string }>;
-  register: (data: RegisterData) => Promise<{ success: boolean; error?: string }>;
+  register: (data: RegisterData) => Promise<{ success: boolean; error?: string; accesscode?: string }>;
   logout: () => Promise<void>;
   updateUser: (userId: string, updates: Partial<User>) => Promise<void>;
   searchUsers: (query: string) => User[];
@@ -50,27 +50,27 @@ function makeId(): string {
 const DUMMY_SPEAKERS: User[] = [];
 
 const BACKEND_URLS = [
+  'https://recordingapi.evaakya.com/api',
   'http://localhost:5000/api',
   'http://172.20.65.219:5000/api',
   'http://10.0.2.2:5000/api',
-  'http://192.168.100.183:5000/api',
 ];
 
 async function tryBackendFetch(endpoint: string, options: any = {}) {
   for (const baseUrl of BACKEND_URLS) {
     try {
+      console.log(`[API Fetch] Connecting to: ${baseUrl}${endpoint}`);
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2500);
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
       const response = await fetch(`${baseUrl}${endpoint}`, {
         ...options,
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
-      if (response.status < 500) {
-        return response;
-      }
-    } catch {
-      // try next IP / URL
+      console.log(`[API Fetch] Status ${response.status} from ${baseUrl}${endpoint}`);
+      return response;
+    } catch (err: any) {
+      console.log(`[API Fetch] Failed connecting to ${baseUrl}${endpoint}:`, err?.message);
     }
   }
   return null;
@@ -123,11 +123,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function login(mobile: string, code: string) {
-    if (code !== ACCESS_CODE) {
-      return { success: false, error: 'Invalid access code. Use 123456.' };
-    }
-
     try {
+      console.log('[Login Attempting on Live API]', { mobile: mobile.trim(), code: code.trim() });
       const response = await tryBackendFetch('/login', {
         method: 'POST',
         headers: {
@@ -137,63 +134,63 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({
           mobile: mobile.trim(),
           accesscode: code.trim(),
-          appVersionNumber: 23,
+          appVersionNumber: 30,
         }),
       });
 
-      if (response) {
-        const resData = await response.json();
-        if (response.ok && resData.success) {
-          const apiUser = resData.user || {};
-          const formattedUser: User = {
-            userId: apiUser.speakerID || apiUser._id || makeId(),
-            fullName: apiUser.name || apiUser.fullName || 'Speaker',
-            age: apiUser.age || 25,
-            gender: apiUser.gender || 'Male',
-            state: apiUser.state || '',
-            district: apiUser.district || '',
-            pincode: apiUser.pincode || '',
-            qualification: apiUser.qualification || '',
-            recordingLanguages: apiUser.recordingLanguages || ['Hindi'],
-            knownLanguages: apiUser.knownLanguages || ['Hindi'],
-            consentLanguage: apiUser.consentLanguage || 'Hindi',
-            mobile: apiUser.mobile || mobile.trim(),
-            coordinator: apiUser.coordinatorName || apiUser.coordinator || '',
-            createdAt: apiUser.createdAt || new Date().toISOString(),
-            voiceVerified: apiUser.voiceVerified || false,
-          };
-
-          await AsyncStorage.setItem(CURRENT_USER_KEY, formattedUser.userId);
-          setCurrentUser(formattedUser);
-          await setDoc(doc(db, 'users', formattedUser.userId), formattedUser, { merge: true }).catch(() => {});
-          return { success: true };
-        }
+      if (!response) {
+        return { success: false, error: 'Could not connect to backend server. Check network connection.' };
       }
+
+      const resData = await response.json();
+      console.log('[Login API Response]', resData);
+
+      if (!response.ok || !resData.success) {
+        return {
+          success: false,
+          error: resData.error || resData.msg || resData.message || 'Login failed',
+        };
+      }
+
+      const apiUser = resData.user || resData.data || {};
+      const formattedUser: User = {
+        userId: apiUser.speakerID || apiUser.id || apiUser._id || makeId(),
+        fullName: apiUser.name || apiUser.fullName || 'Speaker',
+        age: apiUser.age || 25,
+        gender: apiUser.gender || 'Male',
+        state: apiUser.state || '',
+        district: apiUser.district || '',
+        pincode: apiUser.pincode || '',
+        qualification: apiUser.qualification || '',
+        recordingLanguages: apiUser.recordingLanguages || ['Hindi'],
+        knownLanguages: apiUser.knownLanguages || ['Hindi'],
+        consentLanguage: apiUser.consentLanguage || 'Hindi',
+        mobile: apiUser.mobile || mobile.trim(),
+        coordinator: apiUser.coordinatorName || apiUser.coordinator || '',
+        createdAt: apiUser.createdAt || apiUser.createdOn || new Date().toISOString(),
+        voiceVerified: apiUser.voiceVerified !== false,
+      };
+
+      await AsyncStorage.setItem(CURRENT_USER_KEY, formattedUser.userId);
+      setCurrentUser(formattedUser);
+      setUsers((prev) => {
+        const exists = prev.some((u) => u.userId === formattedUser.userId);
+        return exists ? prev.map((u) => (u.userId === formattedUser.userId ? formattedUser : u)) : [...prev, formattedUser];
+      });
+
+      // Non-blocking Firestore background sync so network delays never freeze the UI!
+      setDoc(doc(db, 'users', formattedUser.userId), formattedUser, { merge: true }).catch(() => {});
+
+      return { success: true };
     } catch (err: any) {
-      console.log('Backend API login timeout/fallback...', err?.message);
+      console.log('Login error:', err?.message);
+      return { success: false, error: err?.message || 'Login failed' };
     }
-
-    // 2. Fallback to local storage if offline / mock user
-    const user = users.find((u) => u.mobile === mobile.trim());
-    if (!user) {
-      return { success: false, error: 'Mobile number not registered.' };
-    }
-
-    await AsyncStorage.setItem(CURRENT_USER_KEY, user.userId);
-    setCurrentUser(user);
-    await setDoc(doc(db, 'users', user.userId), user, { merge: true }).catch(() => {});
-    return { success: true };
   }
 
   async function register(data: RegisterData) {
-    const exists = users.find((u) => u.mobile === data.mobile.trim());
-    if (exists) {
-      return { success: false, error: 'Mobile number already registered.' };
-    }
-
-    let createdId = makeId();
-
     try {
+      console.log('[Register Sending to Live API]', data);
       const response = await tryBackendFetch('/register', {
         method: 'POST',
         headers: {
@@ -205,7 +202,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           fullName: data.fullName,
           mobile: data.mobile.trim(),
           accesscode: '123456',
-          appVersionNumber: 23,
+          appVersionNumber: 30,
           role: 'Vendor',
           age: data.age,
           gender: data.gender,
@@ -215,38 +212,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           qualification: data.qualification,
           recordingLanguages: data.recordingLanguages,
           knownLanguages: data.knownLanguages,
+          knownlanguages: Array.isArray(data.knownLanguages) ? data.knownLanguages.join(',') : 'Hindi',
           consentLanguage: data.consentLanguage,
+          consentlanguage: data.consentLanguage,
           coordinator: data.coordinator,
           latitude: 18,
           longitude: 73,
+          phonebrand: 'Android',
+          phonemodel: 'Smartphone',
+          acceptTerms: 'true',
         }),
       });
 
-      if (response) {
-        const resData = await response.json();
-        if (resData.user?.speakerID || resData.user?._id || resData.data?._id || resData.data?.speakerID) {
-          createdId = resData.user?.speakerID || resData.user?._id || resData.data?.speakerID || resData.data?._id;
-        }
+      if (!response) {
+        return { success: false, error: 'Could not connect to live backend server.' };
       }
+
+      const resData = await response.json();
+      console.log('[Register API Response]', resData);
+
+      if (!response.ok || (!resData.success && !resData.data)) {
+        return {
+          success: false,
+          error: resData.error || resData.msg || resData.message || 'Registration failed',
+        };
+      }
+
+      const createdUserObj = resData.data || resData.user || {};
+      const createdId = createdUserObj.speakerID || createdUserObj._id || createdUserObj.id || makeId();
+
+      const newUser: User = {
+        ...data,
+        mobile: data.mobile.trim(),
+        userId: createdId,
+        createdAt: createdUserObj.createdOn || new Date().toISOString(),
+        voiceVerified: true,
+      };
+
+      const updated = [...users, newUser];
+      await AsyncStorage.setItem(USERS_KEY, JSON.stringify(updated));
+      await AsyncStorage.setItem(CURRENT_USER_KEY, newUser.userId);
+      setUsers(updated);
+      setCurrentUser(newUser);
+
+      // Non-blocking Firestore background sync so network delays never freeze the UI!
+      setDoc(doc(db, 'users', newUser.userId), newUser).catch(() => {});
+
+      const generatedCode = createdUserObj.accesscode || '123456';
+
+      return { success: true, accesscode: generatedCode };
     } catch (err: any) {
-      console.log('Backend API register fallback...', err?.message);
+      console.log('Register error:', err?.message);
+      return { success: false, error: err?.message || 'Registration failed' };
     }
-
-    const newUser: User = {
-      ...data,
-      mobile: data.mobile.trim(),
-      userId: createdId,
-      createdAt: new Date().toISOString(),
-      voiceVerified: false,
-    };
-
-    // Save locally and sync to Firestore so all devices discover this new speaker immediately!
-    const updated = [...users, newUser];
-    await AsyncStorage.setItem(USERS_KEY, JSON.stringify(updated));
-    setUsers(updated);
-    await setDoc(doc(db, 'users', newUser.userId), newUser).catch(() => {});
-
-    return { success: true };
   }
 
   async function logout() {
@@ -262,7 +280,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const refreshed = updated.find((u) => u.userId === userId) ?? null;
       setCurrentUser(refreshed);
     }
-    await setDoc(doc(db, 'users', userId), updates, { merge: true }).catch(() => {});
+    await setDoc(doc(db, 'users', userId), updates, { merge: true }).catch(() => { });
   }
 
   function searchUsers(query: string): User[] {
