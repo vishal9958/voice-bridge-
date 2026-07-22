@@ -2,10 +2,10 @@ import { io, Socket } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const SOCKET_URLS = [
-  'https://recordingapi.evaakya.com',
-  'http://172.20.65.219:5000',
   'http://localhost:5000',
+  'http://172.20.65.219:5000',
   'http://10.0.2.2:5000',
+  'https://recordingapi.evaakya.com',
 ];
 
 let socket: Socket | null = null;
@@ -20,7 +20,7 @@ export async function getSocket(): Promise<Socket> {
     try {
       console.log(`[Socket Client] Trying to connect to: ${url}`);
       const s = io(url, {
-        transports: ['websocket'],
+        transports: ['polling', 'websocket'],
         timeout: 5000,
         autoConnect: false,
       });

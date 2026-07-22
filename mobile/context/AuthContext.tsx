@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { db } from '@/services/firebase';
-import { collection, doc, setDoc, onSnapshot } from 'firebase/firestore';
+
 
 export interface User {
   userId: string;
@@ -50,24 +49,36 @@ function makeId(): string {
 const DUMMY_SPEAKERS: User[] = [];
 
 const BACKEND_URLS = [
-  'https://recordingapi.evaakya.com/api',
   'http://localhost:5000/api',
   'http://172.20.65.219:5000/api',
   'http://10.0.2.2:5000/api',
+  'https://recordingapi.evaakya.com/api',
 ];
 
+let globalJwtToken: string | null = null;
+
 async function tryBackendFetch(endpoint: string, options: any = {}) {
-  const token = await AsyncStorage.getItem('vb_jwt_token').catch(() => null);
+  const token = globalJwtToken || (await AsyncStorage.getItem('vb_jwt_token').catch(() => null));
+  if (token && !globalJwtToken) {
+    globalJwtToken = token;
+  }
+
   for (const baseUrl of BACKEND_URLS) {
     try {
-      console.log(`[API Fetch] Connecting to: ${baseUrl}${endpoint}`);
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'x-api-key': 'cd6631d9-484b-4805-9cb1-34c7b6cd8209',
+        ...(options.headers || {}),
+      };
+
+      if (token) {
+        headers['Authorization'] = `Bearer ${token.trim()}`;
+      }
+
+      console.log(`[API Fetch] Connecting to: ${baseUrl}${endpoint} (Bearer Token: ${token ? 'PRESENT' : 'MISSING'})`);
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
-      
-      const headers = {
-        ...options.headers,
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-      };
 
       const response = await fetch(`${baseUrl}${endpoint}`, {
         ...options,
@@ -76,7 +87,10 @@ async function tryBackendFetch(endpoint: string, options: any = {}) {
       });
       clearTimeout(timeoutId);
       console.log(`[API Fetch] Status ${response.status} from ${baseUrl}${endpoint}`);
-      return response;
+      if (response.ok || response.status === 200 || response.status === 201) {
+        return response;
+      }
+      console.log(`[API Fetch] Unsuccessful response ${response.status} from ${baseUrl}${endpoint}, trying next fallback...`);
     } catch (err: any) {
       console.log(`[API Fetch] Failed connecting to ${baseUrl}${endpoint}:`, err?.message);
     }
@@ -91,38 +105,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     loadData();
-
-    // Listen to real-time users from Firestore to discover newly registered speakers across all devices!
-    const unsub = onSnapshot(
-      collection(db, 'users'),
-      (snapshot: any) => {
-        console.log('[Firestore Users Snapshot] Documents count:', snapshot.size);
-        const remoteUsers = snapshot.docs.map((d: any) => {
-          const u = d.data() as User;
-          console.log(`[Firestore User Loaded]: ID=${u.userId}, Name=${u.fullName}`);
-          return u;
-        });
-
-        setUsers((prev) => {
-          const map = new Map<string, User>();
-          prev.filter((u: User) => !u.userId.startsWith('SPK-00')).forEach((u: User) => map.set(u.userId, u));
-          remoteUsers.filter((u: User) => !u.userId.startsWith('SPK-00')).forEach((u: User) => map.set(u.userId, u));
-          return Array.from(map.values());
-        });
-      },
-      (error) => {
-        console.error('[Firestore Users Snapshot Error]:', error.message);
-      }
-    );
-
-    return () => unsub();
   }, []);
 
   async function loadData() {
     try {
-      const [usersRaw, currentId] = await Promise.all([
+      const [usersRaw, currentId, profileRaw] = await Promise.all([
         AsyncStorage.getItem(USERS_KEY),
         AsyncStorage.getItem(CURRENT_USER_KEY),
+        AsyncStorage.getItem('vb_user_profile'),
       ]);
 
       let allUsers: User[] = usersRaw ? JSON.parse(usersRaw) : [];
@@ -131,17 +121,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setUsers(allUsers);
 
-      if (currentId) {
+      if (profileRaw) {
+        setCurrentUser(JSON.parse(profileRaw));
+      } else if (currentId) {
         const found = allUsers.find((u) => u.userId === currentId);
         if (found) setCurrentUser(found);
+      }
 
-        // Fetch registered speakers list from MongoDB backend in background
-        tryBackendFetch('/user/searchspeaker', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
+      if (currentId) {
+        // Fetch registered speakers list from MongoDB backend in background (try /searchspeaker then fallback to /user/searchspeaker)
+        const fetchSpeakers = async () => {
+          let res = await tryBackendFetch('/searchspeaker', { method: 'GET' });
+          if (!res || !res.ok) {
+            res = await tryBackendFetch('/user/searchspeaker', { method: 'GET' });
           }
-        }).then(async (res) => {
           if (res && res.ok) {
             const resData = await res.json();
             if (resData.success && Array.isArray(resData.data)) {
@@ -168,9 +161,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               await AsyncStorage.setItem(USERS_KEY, JSON.stringify(mapped));
             }
           }
-        }).catch((err) => {
-          console.log('[loadData Speakers Fetch Error]:', err?.message);
-        });
+        };
+        fetchSpeakers().catch((err) => console.log('[loadData Speakers Fetch Error]:', err?.message));
       }
     } catch {
       // ignore
@@ -209,8 +201,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
-      // Save JWT token in AsyncStorage
+      // Save JWT token in memory and AsyncStorage
       if (resData.token) {
+        globalJwtToken = resData.token;
         await AsyncStorage.setItem('vb_jwt_token', resData.token);
       }
 
@@ -234,15 +227,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
 
       await AsyncStorage.setItem(CURRENT_USER_KEY, formattedUser.userId);
+      await AsyncStorage.setItem('vb_user_profile', JSON.stringify(formattedUser));
       setCurrentUser(formattedUser);
       
       // Auto-trigger reloading data to load all other speakers
       setTimeout(() => {
         loadData();
       }, 500);
-
-      // Non-blocking Firestore background sync so network delays never freeze the UI!
-      setDoc(doc(db, 'users', formattedUser.userId), formattedUser, { merge: true }).catch(() => {});
 
       return { success: true };
     } catch (err: any) {
@@ -315,11 +306,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const updated = [...users, newUser];
       await AsyncStorage.setItem(USERS_KEY, JSON.stringify(updated));
       await AsyncStorage.setItem(CURRENT_USER_KEY, newUser.userId);
+      await AsyncStorage.setItem('vb_user_profile', JSON.stringify(newUser));
       setUsers(updated);
       setCurrentUser(newUser);
 
-      // Non-blocking Firestore background sync so network delays never freeze the UI!
-      setDoc(doc(db, 'users', newUser.userId), newUser).catch(() => {});
+
 
       const generatedCode = createdUserObj.accesscode || '123456';
 
@@ -361,7 +352,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function logout() {
-    await AsyncStorage.multiRemove([CURRENT_USER_KEY, 'vb_jwt_token', USERS_KEY]).catch(() => {});
+    await AsyncStorage.multiRemove([CURRENT_USER_KEY, 'vb_jwt_token', USERS_KEY, 'vb_user_profile']).catch(() => {});
     setCurrentUser(null);
     setUsers([]);
   }
@@ -373,50 +364,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (currentUser?.userId === userId) {
       const refreshed = updated.find((u) => u.userId === userId) ?? null;
       setCurrentUser(refreshed);
+      if (refreshed) {
+        await AsyncStorage.setItem('vb_user_profile', JSON.stringify(refreshed)).catch(() => {});
+      }
     }
-    await setDoc(doc(db, 'users', userId), updates, { merge: true }).catch(() => { });
   }
 
   function searchUsers(query: string): User[] {
     const q = query.trim().toLowerCase();
     
-    // Background query MongoDB if query is typed
+    // Background query MongoDB if query is typed (trying /searchspeaker then /user/searchspeaker)
     if (q.length >= 6) {
-      tryBackendFetch(`/user/searchspeaker?speakerID=${query.trim()}`)
-        .then(async (res) => {
-          if (res && res.ok) {
-            const resData = await res.json();
-            if (resData.success && resData.data) {
-              const apiUser = resData.data;
-              const speaker: User = {
-                userId: apiUser.speakerID || apiUser.id || apiUser._id || makeId(),
-                fullName: apiUser.name || apiUser.fullName || 'Speaker',
-                age: apiUser.age || 25,
-                gender: apiUser.gender || 'Male',
-                state: apiUser.state || '',
-                district: apiUser.district || '',
-                pincode: apiUser.pincode || '',
-                qualification: apiUser.qualification || '',
-                recordingLanguages: apiUser.recordingLanguages || [apiUser.language || 'Hindi'],
-                knownLanguages: apiUser.knownLanguages || [apiUser.knownlanguages || 'Hindi'],
-                consentLanguage: apiUser.consentLanguage || apiUser.consentlanguage || 'Hindi',
-                mobile: apiUser.mobile || '',
-                coordinator: apiUser.coordinatorName || apiUser.coordinator || '',
-                createdAt: apiUser.createdAt || apiUser.createdOn || new Date().toISOString(),
-                voiceVerified: apiUser.voiceVerified !== false,
-              };
+      const searchFn = async () => {
+        let res = await tryBackendFetch(`/searchspeaker?speakerID=${query.trim()}`);
+        if (!res || !res.ok) {
+          res = await tryBackendFetch(`/user/searchspeaker?speakerID=${query.trim()}`);
+        }
+        if (res && res.ok) {
+          const resData = await res.json();
+          if (resData.success && resData.data) {
+            const apiUser = resData.data;
+            const speaker: User = {
+              userId: apiUser.speakerID || apiUser.id || apiUser._id || makeId(),
+              fullName: apiUser.name || apiUser.fullName || 'Speaker',
+              age: apiUser.age || 25,
+              gender: apiUser.gender || 'Male',
+              state: apiUser.state || '',
+              district: apiUser.district || '',
+              pincode: apiUser.pincode || '',
+              qualification: apiUser.qualification || '',
+              recordingLanguages: apiUser.recordingLanguages || [apiUser.language || 'Hindi'],
+              knownLanguages: apiUser.knownLanguages || [apiUser.knownlanguages || 'Hindi'],
+              consentLanguage: apiUser.consentLanguage || apiUser.consentlanguage || 'Hindi',
+              mobile: apiUser.mobile || '',
+              coordinator: apiUser.coordinatorName || apiUser.coordinator || '',
+              createdAt: apiUser.createdAt || apiUser.createdOn || new Date().toISOString(),
+              voiceVerified: apiUser.voiceVerified !== false,
+            };
 
-              setUsers((prev) => {
-                const exists = prev.some((u) => u.userId === speaker.userId);
-                if (exists) return prev;
-                const newUsers = [...prev, speaker];
-                AsyncStorage.setItem(USERS_KEY, JSON.stringify(newUsers)).catch(() => {});
-                return newUsers;
-              });
-            }
+            setUsers((prev) => {
+              const exists = prev.some((u) => u.userId === speaker.userId);
+              if (exists) return prev;
+              const newUsers = [...prev, speaker];
+              AsyncStorage.setItem(USERS_KEY, JSON.stringify(newUsers)).catch(() => {});
+              return newUsers;
+            });
           }
-        })
-        .catch(() => {});
+        }
+      };
+      searchFn().catch(() => {});
     }
 
     if (!q) {
