@@ -192,9 +192,8 @@ function LoginSection({ colors }: { colors: ReturnType<typeof useColors> }) {
         placeholder="Enter access code"
         value={code}
         onChangeText={setCode}
-        keyboardType="number-pad"
+        autoCapitalize="none"
         secureTextEntry
-        maxLength={6}
       />
       <TouchableOpacity
         style={{ backgroundColor: loading ? colors.border : colors.primary, borderRadius: colors.radius, paddingVertical: 16, alignItems: 'center', marginTop: 8 }}
@@ -215,6 +214,7 @@ function LoginSection({ colors }: { colors: ReturnType<typeof useColors> }) {
 
 // ─── Register Section ─────────────────────────────────────────────────────────
 function RegisterSection({ colors }: { colors: ReturnType<typeof useColors> }) {
+  const router = useRouter();
   const { register } = useAuth();
   const [fullName, setFullName] = useState('');
   const [age, setAge] = useState('');
@@ -267,7 +267,11 @@ function RegisterSection({ colors }: { colors: ReturnType<typeof useColors> }) {
 
     if (result.success) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setSuccess(true);
+      Alert.alert(
+        'Registration Successful!',
+        `Your Access Code for Login is: ${result.accesscode || '123456'}\n\nPlease note down this access code to login anytime.`,
+        [{ text: 'OK', onPress: () => router.replace('/home') }]
+      );
     } else {
       Alert.alert('Registration Failed', result.error ?? 'Unknown error');
     }
@@ -498,9 +502,8 @@ function VerifySection({ colors }: { colors: ReturnType<typeof useColors> }) {
             placeholder="Enter access code"
             value={code}
             onChangeText={setCode}
-            keyboardType="number-pad"
+            autoCapitalize="none"
             secureTextEntry
-            maxLength={6}
           />
           <TouchableOpacity
             style={{ backgroundColor: loginLoading ? colors.border : colors.primary, borderRadius: colors.radius, paddingVertical: 14, alignItems: 'center' }}

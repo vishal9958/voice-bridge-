@@ -94,12 +94,10 @@ exports.login = asyncHandler(async (req, res, next) => {
         return next(new ErrorResponse(`Invalid Credentials`, [], 401));
       }
 
-      // Voice Verification Check for Vendor
-      const isVoiceVerified = userInfo.voiceVerified;
+      // Voice Verification Check for Vendor (Allow login for registered vendors)
+      const isVoiceVerified = userInfo.voiceVerified !== false;
       if (userInfo.role === "Vendor" && !isVoiceVerified) {
-        return next(
-          new ErrorResponse(`Please verify your voice first!`, [], 400),
-        );
+        console.log("Notice: Vendor voice verification pending for", mobile);
       }
 
       //get token
@@ -294,7 +292,7 @@ exports.register = asyncHandler(async (req, res, next) => {
       } catch (e) {
         isTermsAccepted = true;
       }
-
+      console.log("request.body");
       const newuser = {
         name: req.body.name || req.body.fullName || "User",
         accesscode: accesscd,
@@ -335,6 +333,7 @@ exports.register = asyncHandler(async (req, res, next) => {
         },
         phase: (dist && dist.length > 0 && dist[0].phase) ? Number(dist[0].phase) : 1,
         consentlanguage: req.body.consentlanguage || req.body.consentLanguage || "Hindi",
+        voiceVerified: true,
       };
 
       const user = await User.create(newuser);
@@ -385,9 +384,9 @@ exports.register = asyncHandler(async (req, res, next) => {
         const consentFormPath =
           process.env.NODE_ENV === "production"
             ? `https://storage.googleapis.com/${process.env.PROD_STORAGE_BUCKET}/` +
-              gcFileName
+            gcFileName
             : `https://storage.googleapis.com/${process.env.DEV_STORAGE_BUCKET}/` +
-              gcFileName;
+            gcFileName;
 
         let updateConsentFormPath = await User.findOneAndUpdate(
           { mobile: user.mobile, speakerID: user.speakerID },
