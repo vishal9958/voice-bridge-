@@ -50,10 +50,10 @@ function makeId(): string {
 const DUMMY_SPEAKERS: User[] = [];
 
 const BACKEND_URLS = [
-  'https://recordingapi.evaakya.com/api',
   'http://localhost:5000/api',
   'http://172.20.65.219:5000/api',
   'http://10.0.2.2:5000/api',
+  'https://recordingapi.evaakya.com/api',
 ];
 
 async function tryBackendFetch(endpoint: string, options: any = {}) {
@@ -76,7 +76,10 @@ async function tryBackendFetch(endpoint: string, options: any = {}) {
       });
       clearTimeout(timeoutId);
       console.log(`[API Fetch] Status ${response.status} from ${baseUrl}${endpoint}`);
-      return response;
+      if (response.ok || response.status === 200 || response.status === 201) {
+        return response;
+      }
+      console.log(`[API Fetch] Unsuccessful response ${response.status} from ${baseUrl}${endpoint}, trying next fallback...`);
     } catch (err: any) {
       console.log(`[API Fetch] Failed connecting to ${baseUrl}${endpoint}:`, err?.message);
     }
