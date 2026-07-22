@@ -333,7 +333,7 @@ exports.register = asyncHandler(async (req, res, next) => {
           country: "India",
           pincode: req.body.pincode || "411001",
         },
-        phase: (dist && dist.length > 0 && dist[0].phase) ? dist[0].phase : "Phase1",
+        phase: (dist && dist.length > 0 && dist[0].phase) ? Number(dist[0].phase) : 1,
         consentlanguage: req.body.consentlanguage || req.body.consentLanguage || "Hindi",
       };
 
