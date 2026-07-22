@@ -25,6 +25,7 @@
       "bitcode": false
     },
     "android": {
+      "usesCleartextTraffic": true,
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.ACCESS_FINE_LOCATION",
