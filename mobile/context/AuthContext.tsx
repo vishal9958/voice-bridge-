@@ -91,31 +91,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     loadData();
-
-    // Listen to real-time users from Firestore to discover newly registered speakers across all devices!
-    const unsub = onSnapshot(
-      collection(db, 'users'),
-      (snapshot: any) => {
-        console.log('[Firestore Users Snapshot] Documents count:', snapshot.size);
-        const remoteUsers = snapshot.docs.map((d: any) => {
-          const u = d.data() as User;
-          console.log(`[Firestore User Loaded]: ID=${u.userId}, Name=${u.fullName}`);
-          return u;
-        });
-
-        setUsers((prev) => {
-          const map = new Map<string, User>();
-          prev.filter((u: User) => !u.userId.startsWith('SPK-00')).forEach((u: User) => map.set(u.userId, u));
-          remoteUsers.filter((u: User) => !u.userId.startsWith('SPK-00')).forEach((u: User) => map.set(u.userId, u));
-          return Array.from(map.values());
-        });
-      },
-      (error) => {
-        console.error('[Firestore Users Snapshot Error]:', error.message);
-      }
-    );
-
-    return () => unsub();
   }, []);
 
   async function loadData() {
