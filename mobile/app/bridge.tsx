@@ -36,6 +36,8 @@ export default function BridgeScreen() {
           roomId: room.roomId,
           imageIndex: String(room.imageIndex),
           participantName: room.participantName,
+          isHost: 'true',
+          participantId: room.participantId,
         },
       });
     } catch {

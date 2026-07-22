@@ -16,8 +16,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
-import { db } from '@/services/firebase';
-import { doc, getDoc } from 'firebase/firestore';
 import { WebRTCService } from '@/services/WebRTCService';
 
 const SAMPLE_IMAGES = [
@@ -48,10 +46,14 @@ export default function CallScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { roomId, imageIndex, participantName } = useLocalSearchParams<{
+  const { roomId, imageIndex, participantName, isHost, hostId, participantId, offer } = useLocalSearchParams<{
     roomId: string;
     imageIndex: string;
     participantName: string;
+    isHost?: string;
+    hostId?: string;
+    participantId?: string;
+    offer?: string;
   }>();
   const { updateRoom, saveRecording } = useApp();
 
@@ -91,16 +93,13 @@ export default function CallScreen() {
   useEffect(() => {
     if (!roomId || !currentUser) return;
     const userId = currentUser.userId;
+    const host = isHost === 'true';
+    const targetId = host ? participantId : hostId;
 
     let isActive = true;
 
     async function initCall() {
       try {
-        const roomRef = doc(db, 'rooms', roomId);
-        const roomSnap = await getDoc(roomRef);
-
-        const isHost = roomSnap.exists() ? roomSnap.data().hostId === userId : true;
-
         const onStateChange = (state: string) => {
           if (!isActive) return;
           console.log('WebRTC State:', state);
@@ -129,17 +128,21 @@ export default function CallScreen() {
           setRemoteStream(stream);
         };
 
-        if (isHost) {
+        if (host) {
           await webrtcService.createRoom(
             roomId,
             userId,
-            '', // participantId filled by joining speaker
+            participantId || '',
+            imgIndex,
             onStateChange,
             onRemote
           );
         } else {
+          const parsedOffer = offer ? JSON.parse(offer) : null;
           await webrtcService.joinRoom(
             roomId,
+            hostId || '',
+            parsedOffer,
             onStateChange,
             onRemote
           );
@@ -154,10 +157,10 @@ export default function CallScreen() {
 
     return () => {
       isActive = false;
-      webrtcService.closeConnection(roomId).catch(() => {});
+      webrtcService.closeConnection(roomId, targetId).catch(() => {});
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [roomId, currentUser]);
+  }, [roomId, currentUser, isHost, hostId, participantId, offer]);
 
   function getDisplayStatus(state: string): string {
     switch (state) {
@@ -231,13 +234,14 @@ export default function CallScreen() {
     }
 
     const duration = callTimer;
-    if (roomId) {
-      await webrtcService.closeConnection(roomId).catch(() => {});
+    if (roomId && currentUser) {
+      const targetId = isHost === 'true' ? participantId : hostId;
+      await webrtcService.closeConnection(roomId, targetId).catch(() => {});
       await updateRoom(roomId, { status: 'ended', duration });
       const saved = await saveRecording({
         roomId,
-        hostId: '',
-        participantId: '',
+        hostId: isHost === 'true' ? currentUser.userId : (hostId || ''),
+        participantId: isHost === 'true' ? (participantId || '') : currentUser.userId,
         audioUri,
         duration,
         uploaded: false,

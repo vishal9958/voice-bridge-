@@ -107,6 +107,75 @@ const server = app.listen(
   ),
 );
 
+// Setup Socket.io signalling server for WebRTC
+const socketio = require("socket.io");
+const io = socketio(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
+
+const userSocketMap = new Map();
+
+io.on("connection", (socket) => {
+  console.log(`[Socket] New connection: ${socket.id}`);
+
+  socket.on("register-user", (userId) => {
+    if (userId) {
+      userSocketMap.set(userId, socket.id);
+      socket.userId = userId;
+      console.log(`[Socket] Registered user: ${userId} to socket ${socket.id}`);
+    }
+  });
+
+  socket.on("make-call", (payload) => {
+    const { participantId } = payload;
+    const targetSocketId = userSocketMap.get(participantId);
+    if (targetSocketId) {
+      console.log(`[Socket] Routing call from ${payload.hostId} to ${participantId}`);
+      io.to(targetSocketId).emit("incoming-call", payload);
+    } else {
+      console.log(`[Socket] Callee ${participantId} is offline.`);
+      socket.emit("call-failed", { reason: "User offline", participantId });
+    }
+  });
+
+  socket.on("accept-call", (payload) => {
+    const { hostId } = payload;
+    const targetSocketId = userSocketMap.get(hostId);
+    if (targetSocketId) {
+      console.log(`[Socket] Routing call acceptance to host ${hostId}`);
+      io.to(targetSocketId).emit("call-accepted", payload);
+    }
+  });
+
+  socket.on("send-ice-candidate", (payload) => {
+    const { targetId } = payload;
+    const targetSocketId = userSocketMap.get(targetId);
+    if (targetSocketId) {
+      io.to(targetSocketId).emit("ice-candidate", payload);
+    }
+  });
+
+  socket.on("end-call", (payload) => {
+    const { targetId } = payload;
+    const targetSocketId = userSocketMap.get(targetId);
+    if (targetSocketId) {
+      console.log(`[Socket] Relay call-ended to peer ${targetId}`);
+      io.to(targetSocketId).emit("call-ended", payload);
+    }
+  });
+
+  socket.on("disconnect", () => {
+    console.log(`[Socket] Client disconnected: ${socket.id}`);
+    if (socket.userId) {
+      userSocketMap.delete(socket.userId);
+      console.log(`[Socket] Removed mapping for user: ${socket.userId}`);
+    }
+  });
+});
+
 //Setting Timeout
 const DEFAULT_TIMEOUT = 60 * 60 * 1000; // in ms
 server.setTimeout(DEFAULT_TIMEOUT);

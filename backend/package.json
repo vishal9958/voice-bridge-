@@ -29,6 +29,7 @@
     "nodemailer": "^6.4.17",
     "nodemon": "^2.0.6",
     "officegen": "^0.6.5",
+    "socket.io": "^4.8.3",
     "springedge": "^1.0.6",
     "uuid": "^8.3.2",
     "winston": "^3.3.3",

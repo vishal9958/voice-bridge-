@@ -13,8 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import { useAuth, User } from '@/context/AuthContext';
-import { db } from '@/services/firebase';
-import { collection, query, where, onSnapshot, updateDoc, doc } from 'firebase/firestore';
+import { getSocket } from '@/services/socket';
 
 function avatarInitials(name: string): string {
   return name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2);
@@ -115,29 +114,41 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!currentUser) return;
 
-    const roomsCol = collection(db, 'rooms');
-    const q = query(
-      roomsCol,
-      where('participantId', '==', currentUser.userId),
-      where('status', '==', 'connecting')
-    );
+    let isSubscribed = true;
 
-    const unsub = onSnapshot(q, (snapshot: any) => {
-      // Find the first active room that has an offer and is not ended
-      const activeCall = snapshot.docs
-        .map((doc: any) => ({ id: doc.id, ...doc.data() }))
-        .find((room: any) => room.offer && room.status === 'connecting');
+    getSocket()
+      .then((socket) => {
+        if (!isSubscribed) return;
 
-      if (activeCall) {
-        setIncomingCall(activeCall);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      } else {
-        setIncomingCall(null);
-      }
-    });
+        socket.on('incoming-call', (payload: any) => {
+          console.log('[Socket] Incoming call received:', payload);
+          setIncomingCall({
+            id: payload.roomId,
+            hostId: payload.hostId,
+            offer: payload.offer,
+            imageIndex: payload.imageIndex,
+          });
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        });
 
-    return () => unsub();
-  }, [currentUser]);
+        socket.on('call-ended', (payload: any) => {
+          if (payload.roomId === incomingCall?.id) {
+            setIncomingCall(null);
+          }
+        });
+      })
+      .catch((err) => console.log('Socket incoming call setup error:', err));
+
+    return () => {
+      isSubscribed = false;
+      getSocket()
+        .then((socket) => {
+          socket.off('incoming-call');
+          socket.off('call-ended');
+        })
+        .catch(() => {});
+    };
+  }, [currentUser, incomingCall]);
 
   if (!currentUser) return null;
 
@@ -203,8 +214,10 @@ export default function HomeScreen() {
                 }}
                 onPress={async () => {
                   if (incomingCall) {
-                    const roomRef = doc(db, 'rooms', incomingCall.id);
-                    await updateDoc(roomRef, { status: 'ended' }).catch(() => {});
+                    try {
+                      const socket = await getSocket();
+                      socket.emit('end-call', { roomId: incomingCall.id, targetId: incomingCall.hostId });
+                    } catch (e) {}
                     setIncomingCall(null);
                   }
                 }}
@@ -220,14 +233,20 @@ export default function HomeScreen() {
                   alignItems: 'center',
                 }}
                 onPress={() => {
-                  router.push({
-                    pathname: '/call',
-                    params: {
-                      roomId: incomingCall.id,
-                      imageIndex: String(incomingCall.imageIndex ?? 0),
-                      participantName: hostName,
-                    },
-                  });
+                  if (incomingCall) {
+                    router.push({
+                      pathname: '/call',
+                      params: {
+                        roomId: incomingCall.id,
+                        imageIndex: String(incomingCall.imageIndex ?? 0),
+                        participantName: hostName,
+                        isHost: 'false',
+                        hostId: incomingCall.hostId,
+                        offer: JSON.stringify(incomingCall.offer),
+                      },
+                    });
+                    setIncomingCall(null);
+                  }
                 }}
               >
                 <Text style={{ color: '#fff', fontWeight: '600' }}>Join Call</Text>

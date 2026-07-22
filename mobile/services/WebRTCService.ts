@@ -5,16 +5,7 @@ import {
   mediaDevices,
   MediaStream,
 } from 'react-native-webrtc';
-import { db } from './firebase';
-import {
-  doc,
-  setDoc,
-  updateDoc,
-  addDoc,
-  collection,
-  onSnapshot,
-  getDoc,
-} from 'firebase/firestore';
+import { getSocket } from './socket';
 
 const ICE_SERVERS_CONFIG = {
   iceServers: [
@@ -30,7 +21,6 @@ const ICE_SERVERS_CONFIG = {
 export class WebRTCService {
   private peerConnection: any = null;
   private localStream: MediaStream | null = null;
-  private unsubscribes: (() => void)[] = [];
 
   constructor() {}
 
@@ -89,15 +79,18 @@ export class WebRTCService {
   }
 
   /**
-   * Host actions to create a new room and upload SDP offer.
+   * Host actions to create a new room and upload SDP offer via WebSockets.
    */
   async createRoom(
     roomId: string,
     hostId: string,
     participantId: string,
+    imageIndex: number,
     onConnectionStateChange: (state: string) => void,
     onRemoteStream: (stream: MediaStream) => void
   ): Promise<void> {
+    const socket = await getSocket();
+    
     // 1. Create Peer Connection
     const pc = this.createPeerConnection(onConnectionStateChange, onRemoteStream);
 
@@ -114,10 +107,11 @@ export class WebRTCService {
     // 3. ICE Candidate gathering for Host
     pc.onicecandidate = (event: any) => {
       if (event.candidate) {
-        addDoc(
-          collection(db, 'rooms', roomId, 'callerCandidates'),
-          event.candidate.toJSON()
-        ).catch((err) => console.error('Error adding caller candidate:', err));
+        socket.emit('send-ice-candidate', {
+          targetId: participantId,
+          candidate: event.candidate.toJSON(),
+          roomId,
+        });
       }
     };
 
@@ -125,71 +119,63 @@ export class WebRTCService {
     const offerDescription = await pc.createOffer();
     await pc.setLocalDescription(offerDescription);
 
-    // 5. Upload offer to Firestore
-    const roomRef = doc(db, 'rooms', roomId);
-    await setDoc(roomRef, {
+    // 5. Upload offer via Socket make-call
+    socket.emit('make-call', {
       hostId,
       participantId,
-      status: 'connecting',
+      roomId,
+      imageIndex,
       offer: {
         type: offerDescription.type,
         sdp: offerDescription.sdp,
       },
-      createdAt: new Date().toISOString(),
     });
 
     // 6. Listen for remote answer
-    const unsubAnswer = onSnapshot(roomRef, (snapshot: any) => {
-      const data = snapshot.data();
-      if (data && data.answer && !pc.remoteDescription) {
-        const answerDescription = new RTCSessionDescription(data.answer);
+    socket.on('call-accepted', (payload: any) => {
+      if (payload.roomId === roomId && payload.answer && !pc.remoteDescription) {
+        const answerDescription = new RTCSessionDescription(payload.answer);
         pc.setRemoteDescription(answerDescription).catch((err: any) =>
           console.error('Error setting remote description from answer:', err)
         );
       }
     });
-    this.unsubscribes.push(unsubAnswer);
 
     // 7. Listen for callee (participant) ICE candidates
-    const calleeCandidatesCol = collection(db, 'rooms', roomId, 'calleeCandidates');
-    const unsubCalleeCandidates = onSnapshot(calleeCandidatesCol, (snapshot: any) => {
-      snapshot.docChanges().forEach((change: any) => {
-        if (change.type === 'added') {
-          const data = change.doc.data();
-          const candidate = new RTCIceCandidate(data as any);
-          pc.addIceCandidate(candidate).catch((err: any) =>
-            console.error('Error adding callee candidate:', err)
-          );
-        }
-      });
+    socket.on('ice-candidate', (payload: any) => {
+      if (payload.roomId === roomId && payload.candidate) {
+        const candidate = new RTCIceCandidate(payload.candidate);
+        pc.addIceCandidate(candidate).catch((err: any) =>
+          console.error('Error adding callee candidate:', err)
+        );
+      }
     });
-    this.unsubscribes.push(unsubCalleeCandidates);
+
+    // 8. Listen for call-ended status
+    socket.on('call-ended', (payload: any) => {
+      if (payload.roomId === roomId) {
+        this.closePeerConnection();
+        onConnectionStateChange('disconnected');
+      }
+    });
   }
 
   /**
-   * Participant actions to join an existing room and upload SDP answer.
+   * Participant actions to join an existing room and upload SDP answer via WebSockets.
    */
   async joinRoom(
     roomId: string,
+    hostId: string,
+    offer: any,
     onConnectionStateChange: (state: string) => void,
     onRemoteStream: (stream: MediaStream) => void
   ): Promise<void> {
-    // 1. Fetch Room Offer
-    const roomRef = doc(db, 'rooms', roomId);
-    const roomSnapshot = await getDoc(roomRef);
-    if (!roomSnapshot.exists()) {
-      throw new Error('Calling room does not exist.');
-    }
-    const roomData = roomSnapshot.data();
-    const offer = roomData.offer;
-    if (!offer) {
-      throw new Error('Room offers are not initialized.');
-    }
+    const socket = await getSocket();
 
-    // 2. Create Peer Connection
+    // 1. Create Peer Connection
     const pc = this.createPeerConnection(onConnectionStateChange, onRemoteStream);
 
-    // 3. Add local tracks
+    // 2. Add local tracks
     const localStream = await this.initLocalStream();
     if (typeof pc.addTrack === 'function') {
       localStream.getTracks().forEach((track) => {
@@ -199,46 +185,51 @@ export class WebRTCService {
       pc.addStream(localStream);
     }
 
-    // 4. ICE Candidate gathering for Participant
+    // 3. ICE Candidate gathering for Participant
     pc.onicecandidate = (event: any) => {
       if (event.candidate) {
-        addDoc(
-          collection(db, 'rooms', roomId, 'calleeCandidates'),
-          event.candidate.toJSON()
-        ).catch((err) => console.error('Error adding callee candidate:', err));
+        socket.emit('send-ice-candidate', {
+          targetId: hostId,
+          candidate: event.candidate.toJSON(),
+          roomId,
+        });
       }
     };
 
-    // 5. Set remote description from Host Offer
+    // 4. Listen for host ICE candidates
+    socket.on('ice-candidate', (payload: any) => {
+      if (payload.roomId === roomId && payload.candidate) {
+        const candidate = new RTCIceCandidate(payload.candidate);
+        pc.addIceCandidate(candidate).catch((err: any) =>
+          console.error('Error adding caller candidate:', err)
+        );
+      }
+    });
+
+    // 5. Listen for call-ended status
+    socket.on('call-ended', (payload: any) => {
+      if (payload.roomId === roomId) {
+        this.closePeerConnection();
+        onConnectionStateChange('disconnected');
+      }
+    });
+
+    // 6. Set remote description from Host Offer
     await pc.setRemoteDescription(new RTCSessionDescription(offer));
 
-    // 6. Create answer and set local description
+    // 7. Create answer and set local description
     const answerDescription = await pc.createAnswer();
     await pc.setLocalDescription(answerDescription);
 
-    // 7. Upload answer and update room status
-    await updateDoc(roomRef, {
-      status: 'connected',
+    // 8. Upload answer via accept-call
+    socket.emit('accept-call', {
+      roomId,
+      hostId,
       answer: {
         type: answerDescription.type,
         sdp: answerDescription.sdp,
       },
     });
-
-    // 8. Listen for host (caller) ICE candidates
-    const callerCandidatesCol = collection(db, 'rooms', roomId, 'callerCandidates');
-    const unsubCallerCandidates = onSnapshot(callerCandidatesCol, (snapshot: any) => {
-      snapshot.docChanges().forEach((change: any) => {
-        if (change.type === 'added') {
-          const data = change.doc.data();
-          const candidate = new RTCIceCandidate(data as any);
-          pc.addIceCandidate(candidate).catch((err: any) =>
-            console.error('Error adding caller candidate:', err)
-          );
-        }
-      });
-    });
-    this.unsubscribes.push(unsubCallerCandidates);
   }
 
   /**
@@ -256,18 +247,21 @@ export class WebRTCService {
   }
 
   /**
-   * Cleans up all tracks, connections, listeners and marks room as ended in Firestore.
+   * Cleans up all tracks, connections, listeners and marks room as ended in Socket Server.
    */
-  async closeConnection(roomId: string): Promise<void> {
-    // 1. Unsubscribe Firestore Listeners
-    this.unsubscribes.forEach((unsub) => {
-      try {
-        unsub();
-      } catch (err) {
-        console.error('Error unsubscribing listener:', err);
+  async closeConnection(roomId: string, targetId?: string): Promise<void> {
+    // 1. Remove socket listeners & emit end-call
+    try {
+      const socket = await getSocket();
+      socket.off('call-accepted');
+      socket.off('ice-candidate');
+      socket.off('call-ended');
+      if (targetId) {
+        socket.emit('end-call', { roomId, targetId });
       }
-    });
-    this.unsubscribes = [];
+    } catch (err) {
+      console.log('Error ending socket connection:', err);
+    }
 
     // 2. Stop local tracks to release mic
     if (this.localStream) {
@@ -281,15 +275,5 @@ export class WebRTCService {
 
     // 3. Close connection
     this.closePeerConnection();
-
-    // 4. Update Firestore Room Status
-    try {
-      await updateDoc(doc(db, 'rooms', roomId), {
-        status: 'ended',
-        endedAt: new Date().toISOString(),
-      });
-    } catch (err) {
-      // Room might not exist or already be deleted/ended
-    }
   }
 }
