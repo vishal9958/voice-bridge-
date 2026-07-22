@@ -108,6 +108,7 @@ exports.login = asyncHandler(async (req, res, next) => {
 
       const user = {
         id: userInfo._id,
+        speakerID: userInfo.speakerID,
         role: userInfo.role,
         mobile: userInfo.mobile,
         name: userInfo.name,

@@ -57,13 +57,21 @@ const BACKEND_URLS = [
 ];
 
 async function tryBackendFetch(endpoint: string, options: any = {}) {
+  const token = await AsyncStorage.getItem('vb_jwt_token').catch(() => null);
   for (const baseUrl of BACKEND_URLS) {
     try {
       console.log(`[API Fetch] Connecting to: ${baseUrl}${endpoint}`);
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+      
+      const headers = {
+        ...options.headers,
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      };
+
       const response = await fetch(`${baseUrl}${endpoint}`, {
         ...options,
+        headers,
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
@@ -85,15 +93,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loadData();
 
     // Listen to real-time users from Firestore to discover newly registered speakers across all devices!
-    const unsub = onSnapshot(collection(db, 'users'), (snapshot: any) => {
-      const remoteUsers = snapshot.docs.map((d: any) => d.data() as User);
-      setUsers((prev) => {
-        const map = new Map<string, User>();
-        prev.filter((u: User) => !u.userId.startsWith('SPK-00')).forEach((u: User) => map.set(u.userId, u));
-        remoteUsers.filter((u: User) => !u.userId.startsWith('SPK-00')).forEach((u: User) => map.set(u.userId, u));
-        return Array.from(map.values());
-      });
-    });
+    const unsub = onSnapshot(
+      collection(db, 'users'),
+      (snapshot: any) => {
+        console.log('[Firestore Users Snapshot] Documents count:', snapshot.size);
+        const remoteUsers = snapshot.docs.map((d: any) => {
+          const u = d.data() as User;
+          console.log(`[Firestore User Loaded]: ID=${u.userId}, Name=${u.fullName}`);
+          return u;
+        });
+
+        setUsers((prev) => {
+          const map = new Map<string, User>();
+          prev.filter((u: User) => !u.userId.startsWith('SPK-00')).forEach((u: User) => map.set(u.userId, u));
+          remoteUsers.filter((u: User) => !u.userId.startsWith('SPK-00')).forEach((u: User) => map.set(u.userId, u));
+          return Array.from(map.values());
+        });
+      },
+      (error) => {
+        console.error('[Firestore Users Snapshot Error]:', error.message);
+      }
+    );
 
     return () => unsub();
   }, []);
@@ -114,6 +134,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (currentId) {
         const found = allUsers.find((u) => u.userId === currentId);
         if (found) setCurrentUser(found);
+
+        // Fetch registered speakers list from MongoDB backend in background
+        tryBackendFetch('/user/searchspeaker', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        }).then(async (res) => {
+          if (res && res.ok) {
+            const resData = await res.json();
+            if (resData.success && Array.isArray(resData.data)) {
+              console.log('[MongoDB Speakers List Loaded] Count:', resData.data.length);
+              const mapped: User[] = resData.data.map((apiUser: any) => ({
+                userId: apiUser.speakerID || apiUser.id || apiUser._id || makeId(),
+                fullName: apiUser.name || apiUser.fullName || 'Speaker',
+                age: apiUser.age || 25,
+                gender: apiUser.gender || 'Male',
+                state: apiUser.state || '',
+                district: apiUser.district || '',
+                pincode: apiUser.pincode || '',
+                qualification: apiUser.qualification || '',
+                recordingLanguages: apiUser.recordingLanguages || [apiUser.language || 'Hindi'],
+                knownLanguages: apiUser.knownLanguages || [apiUser.knownlanguages || 'Hindi'],
+                consentLanguage: apiUser.consentLanguage || apiUser.consentlanguage || 'Hindi',
+                mobile: apiUser.mobile || '',
+                coordinator: apiUser.coordinatorName || apiUser.coordinator || '',
+                createdAt: apiUser.createdAt || apiUser.createdOn || new Date().toISOString(),
+                voiceVerified: apiUser.voiceVerified !== false,
+              }));
+              
+              setUsers(mapped);
+              await AsyncStorage.setItem(USERS_KEY, JSON.stringify(mapped));
+            }
+          }
+        }).catch((err) => {
+          console.log('[loadData Speakers Fetch Error]:', err?.message);
+        });
       }
     } catch {
       // ignore
@@ -152,6 +209,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
+      // Save JWT token in AsyncStorage
+      if (resData.token) {
+        await AsyncStorage.setItem('vb_jwt_token', resData.token);
+      }
+
       const apiUser = resData.user || resData.data || {};
       const formattedUser: User = {
         userId: apiUser.speakerID || apiUser.id || apiUser._id || makeId(),
@@ -173,10 +235,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       await AsyncStorage.setItem(CURRENT_USER_KEY, formattedUser.userId);
       setCurrentUser(formattedUser);
-      setUsers((prev) => {
-        const exists = prev.some((u) => u.userId === formattedUser.userId);
-        return exists ? prev.map((u) => (u.userId === formattedUser.userId ? formattedUser : u)) : [...prev, formattedUser];
-      });
+      
+      // Auto-trigger reloading data to load all other speakers
+      setTimeout(() => {
+        loadData();
+      }, 500);
 
       // Non-blocking Firestore background sync so network delays never freeze the UI!
       setDoc(doc(db, 'users', formattedUser.userId), formattedUser, { merge: true }).catch(() => {});
@@ -260,6 +323,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const generatedCode = createdUserObj.accesscode || '123456';
 
+      // Perform background login to get JWT token so the user is authenticated for speaker list endpoints
+      try {
+        const loginResponse = await tryBackendFetch('/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': 'cd6631d9-484b-4805-9cb1-34c7b6cd8209',
+          },
+          body: JSON.stringify({
+            mobile: data.mobile.trim(),
+            accesscode: generatedCode,
+            appVersionNumber: 30,
+          }),
+        });
+
+        if (loginResponse && loginResponse.ok) {
+          const loginData = await loginResponse.json();
+          if (loginData.success && loginData.token) {
+            await AsyncStorage.setItem('vb_jwt_token', loginData.token);
+          }
+        }
+      } catch (loginErr) {
+        console.log('[Background Register Login Error]:', loginErr);
+      }
+
+      // Reload speakers list from MongoDB backend
+      setTimeout(() => {
+        loadData();
+      }, 500);
+
       return { success: true, accesscode: generatedCode };
     } catch (err: any) {
       console.log('Register error:', err?.message);
@@ -268,8 +361,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function logout() {
-    await AsyncStorage.removeItem(CURRENT_USER_KEY);
+    await AsyncStorage.multiRemove([CURRENT_USER_KEY, 'vb_jwt_token', USERS_KEY]).catch(() => {});
     setCurrentUser(null);
+    setUsers([]);
   }
 
   async function updateUser(userId: string, updates: Partial<User>) {
