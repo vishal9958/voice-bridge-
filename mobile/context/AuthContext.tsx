@@ -379,6 +379,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   function searchUsers(query: string): User[] {
     const q = query.trim().toLowerCase();
+    
+    // Background query MongoDB if query is typed
+    if (q.length >= 6) {
+      tryBackendFetch(`/user/searchspeaker?speakerID=${query.trim()}`)
+        .then(async (res) => {
+          if (res && res.ok) {
+            const resData = await res.json();
+            if (resData.success && resData.data) {
+              const apiUser = resData.data;
+              const speaker: User = {
+                userId: apiUser.speakerID || apiUser.id || apiUser._id || makeId(),
+                fullName: apiUser.name || apiUser.fullName || 'Speaker',
+                age: apiUser.age || 25,
+                gender: apiUser.gender || 'Male',
+                state: apiUser.state || '',
+                district: apiUser.district || '',
+                pincode: apiUser.pincode || '',
+                qualification: apiUser.qualification || '',
+                recordingLanguages: apiUser.recordingLanguages || [apiUser.language || 'Hindi'],
+                knownLanguages: apiUser.knownLanguages || [apiUser.knownlanguages || 'Hindi'],
+                consentLanguage: apiUser.consentLanguage || apiUser.consentlanguage || 'Hindi',
+                mobile: apiUser.mobile || '',
+                coordinator: apiUser.coordinatorName || apiUser.coordinator || '',
+                createdAt: apiUser.createdAt || apiUser.createdOn || new Date().toISOString(),
+                voiceVerified: apiUser.voiceVerified !== false,
+              };
+
+              setUsers((prev) => {
+                const exists = prev.some((u) => u.userId === speaker.userId);
+                if (exists) return prev;
+                const newUsers = [...prev, speaker];
+                AsyncStorage.setItem(USERS_KEY, JSON.stringify(newUsers)).catch(() => {});
+                return newUsers;
+              });
+            }
+          }
+        })
+        .catch(() => {});
+    }
+
     if (!q) {
       return users.filter((u: User) => u.userId !== currentUser?.userId);
     }
