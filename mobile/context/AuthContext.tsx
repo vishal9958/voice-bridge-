@@ -120,9 +120,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function loadData() {
     try {
-      const [usersRaw, currentId] = await Promise.all([
+      const [usersRaw, currentId, profileRaw] = await Promise.all([
         AsyncStorage.getItem(USERS_KEY),
         AsyncStorage.getItem(CURRENT_USER_KEY),
+        AsyncStorage.getItem('vb_user_profile'),
       ]);
 
       let allUsers: User[] = usersRaw ? JSON.parse(usersRaw) : [];
@@ -131,9 +132,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setUsers(allUsers);
 
-      if (currentId) {
+      if (profileRaw) {
+        setCurrentUser(JSON.parse(profileRaw));
+      } else if (currentId) {
         const found = allUsers.find((u) => u.userId === currentId);
         if (found) setCurrentUser(found);
+      }
+
+      if (currentId) {
 
         // Fetch registered speakers list from MongoDB backend in background
         tryBackendFetch('/user/searchspeaker', {
@@ -234,6 +240,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
 
       await AsyncStorage.setItem(CURRENT_USER_KEY, formattedUser.userId);
+      await AsyncStorage.setItem('vb_user_profile', JSON.stringify(formattedUser));
       setCurrentUser(formattedUser);
       
       // Auto-trigger reloading data to load all other speakers
@@ -315,6 +322,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const updated = [...users, newUser];
       await AsyncStorage.setItem(USERS_KEY, JSON.stringify(updated));
       await AsyncStorage.setItem(CURRENT_USER_KEY, newUser.userId);
+      await AsyncStorage.setItem('vb_user_profile', JSON.stringify(newUser));
       setUsers(updated);
       setCurrentUser(newUser);
 
@@ -361,7 +369,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function logout() {
-    await AsyncStorage.multiRemove([CURRENT_USER_KEY, 'vb_jwt_token', USERS_KEY]).catch(() => {});
+    await AsyncStorage.multiRemove([CURRENT_USER_KEY, 'vb_jwt_token', USERS_KEY, 'vb_user_profile']).catch(() => {});
     setCurrentUser(null);
     setUsers([]);
   }
@@ -373,6 +381,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (currentUser?.userId === userId) {
       const refreshed = updated.find((u) => u.userId === userId) ?? null;
       setCurrentUser(refreshed);
+      if (refreshed) {
+        await AsyncStorage.setItem('vb_user_profile', JSON.stringify(refreshed)).catch(() => {});
+      }
     }
     await setDoc(doc(db, 'users', userId), updates, { merge: true }).catch(() => { });
   }
