@@ -20,7 +20,7 @@ export async function getSocket(): Promise<Socket> {
     try {
       console.log(`[Socket Client] Trying to connect to: ${url}`);
       const s = io(url, {
-        transports: ['websocket'],
+        transports: ['polling', 'websocket'],
         timeout: 5000,
         autoConnect: false,
       });

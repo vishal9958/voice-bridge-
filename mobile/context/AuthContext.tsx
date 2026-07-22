@@ -117,7 +117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (currentId) {
 
         // Fetch registered speakers list from MongoDB backend in background
-        tryBackendFetch('/user/searchspeaker', {
+        tryBackendFetch('/searchspeaker', {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -368,7 +368,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     
     // Background query MongoDB if query is typed
     if (q.length >= 6) {
-      tryBackendFetch(`/user/searchspeaker?speakerID=${query.trim()}`)
+      tryBackendFetch(`/searchspeaker?speakerID=${query.trim()}`)
         .then(async (res) => {
           if (res && res.ok) {
             const resData = await res.json();
