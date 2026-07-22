@@ -55,20 +55,30 @@ const BACKEND_URLS = [
   'https://recordingapi.evaakya.com/api',
 ];
 
+let globalJwtToken: string | null = null;
+
 async function tryBackendFetch(endpoint: string, options: any = {}) {
-  const token = await AsyncStorage.getItem('vb_jwt_token').catch(() => null);
+  const token = globalJwtToken || (await AsyncStorage.getItem('vb_jwt_token').catch(() => null));
+  if (token && !globalJwtToken) {
+    globalJwtToken = token;
+  }
+
   for (const baseUrl of BACKEND_URLS) {
     try {
-      console.log(`[API Fetch] Connecting to: ${baseUrl}${endpoint}`);
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
-      
-      const headers = {
+      const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         'x-api-key': 'cd6631d9-484b-4805-9cb1-34c7b6cd8209',
-        ...options.headers,
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        ...(options.headers || {}),
       };
+
+      if (token) {
+        headers['Authorization'] = `Bearer ${token.trim()}`;
+      }
+
+      console.log(`[API Fetch] Connecting to: ${baseUrl}${endpoint} (Bearer Token: ${token ? 'PRESENT' : 'MISSING'})`);
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
       const response = await fetch(`${baseUrl}${endpoint}`, {
         ...options,
@@ -119,14 +129,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (currentId) {
-
-        // Fetch registered speakers list from MongoDB backend in background
-        tryBackendFetch('/searchspeaker', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
+        // Fetch registered speakers list from MongoDB backend in background (try /searchspeaker then fallback to /user/searchspeaker)
+        const fetchSpeakers = async () => {
+          let res = await tryBackendFetch('/searchspeaker', { method: 'GET' });
+          if (!res || !res.ok) {
+            res = await tryBackendFetch('/user/searchspeaker', { method: 'GET' });
           }
-        }).then(async (res) => {
           if (res && res.ok) {
             const resData = await res.json();
             if (resData.success && Array.isArray(resData.data)) {
@@ -153,9 +161,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               await AsyncStorage.setItem(USERS_KEY, JSON.stringify(mapped));
             }
           }
-        }).catch((err) => {
-          console.log('[loadData Speakers Fetch Error]:', err?.message);
-        });
+        };
+        fetchSpeakers().catch((err) => console.log('[loadData Speakers Fetch Error]:', err?.message));
       }
     } catch {
       // ignore
@@ -194,8 +201,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
-      // Save JWT token in AsyncStorage
+      // Save JWT token in memory and AsyncStorage
       if (resData.token) {
+        globalJwtToken = resData.token;
         await AsyncStorage.setItem('vb_jwt_token', resData.token);
       }
 
@@ -365,43 +373,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   function searchUsers(query: string): User[] {
     const q = query.trim().toLowerCase();
     
-    // Background query MongoDB if query is typed
+    // Background query MongoDB if query is typed (trying /searchspeaker then /user/searchspeaker)
     if (q.length >= 6) {
-      tryBackendFetch(`/searchspeaker?speakerID=${query.trim()}`)
-        .then(async (res) => {
-          if (res && res.ok) {
-            const resData = await res.json();
-            if (resData.success && resData.data) {
-              const apiUser = resData.data;
-              const speaker: User = {
-                userId: apiUser.speakerID || apiUser.id || apiUser._id || makeId(),
-                fullName: apiUser.name || apiUser.fullName || 'Speaker',
-                age: apiUser.age || 25,
-                gender: apiUser.gender || 'Male',
-                state: apiUser.state || '',
-                district: apiUser.district || '',
-                pincode: apiUser.pincode || '',
-                qualification: apiUser.qualification || '',
-                recordingLanguages: apiUser.recordingLanguages || [apiUser.language || 'Hindi'],
-                knownLanguages: apiUser.knownLanguages || [apiUser.knownlanguages || 'Hindi'],
-                consentLanguage: apiUser.consentLanguage || apiUser.consentlanguage || 'Hindi',
-                mobile: apiUser.mobile || '',
-                coordinator: apiUser.coordinatorName || apiUser.coordinator || '',
-                createdAt: apiUser.createdAt || apiUser.createdOn || new Date().toISOString(),
-                voiceVerified: apiUser.voiceVerified !== false,
-              };
+      const searchFn = async () => {
+        let res = await tryBackendFetch(`/searchspeaker?speakerID=${query.trim()}`);
+        if (!res || !res.ok) {
+          res = await tryBackendFetch(`/user/searchspeaker?speakerID=${query.trim()}`);
+        }
+        if (res && res.ok) {
+          const resData = await res.json();
+          if (resData.success && resData.data) {
+            const apiUser = resData.data;
+            const speaker: User = {
+              userId: apiUser.speakerID || apiUser.id || apiUser._id || makeId(),
+              fullName: apiUser.name || apiUser.fullName || 'Speaker',
+              age: apiUser.age || 25,
+              gender: apiUser.gender || 'Male',
+              state: apiUser.state || '',
+              district: apiUser.district || '',
+              pincode: apiUser.pincode || '',
+              qualification: apiUser.qualification || '',
+              recordingLanguages: apiUser.recordingLanguages || [apiUser.language || 'Hindi'],
+              knownLanguages: apiUser.knownLanguages || [apiUser.knownlanguages || 'Hindi'],
+              consentLanguage: apiUser.consentLanguage || apiUser.consentlanguage || 'Hindi',
+              mobile: apiUser.mobile || '',
+              coordinator: apiUser.coordinatorName || apiUser.coordinator || '',
+              createdAt: apiUser.createdAt || apiUser.createdOn || new Date().toISOString(),
+              voiceVerified: apiUser.voiceVerified !== false,
+            };
 
-              setUsers((prev) => {
-                const exists = prev.some((u) => u.userId === speaker.userId);
-                if (exists) return prev;
-                const newUsers = [...prev, speaker];
-                AsyncStorage.setItem(USERS_KEY, JSON.stringify(newUsers)).catch(() => {});
-                return newUsers;
-              });
-            }
+            setUsers((prev) => {
+              const exists = prev.some((u) => u.userId === speaker.userId);
+              if (exists) return prev;
+              const newUsers = [...prev, speaker];
+              AsyncStorage.setItem(USERS_KEY, JSON.stringify(newUsers)).catch(() => {});
+              return newUsers;
+            });
           }
-        })
-        .catch(() => {});
+        }
+      };
+      searchFn().catch(() => {});
     }
 
     if (!q) {
