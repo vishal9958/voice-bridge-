@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { db } from '@/services/firebase';
-import { collection, doc, setDoc, onSnapshot } from 'firebase/firestore';
+
 
 export interface User {
   userId: string;
@@ -65,6 +64,8 @@ async function tryBackendFetch(endpoint: string, options: any = {}) {
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
       
       const headers = {
+        'Content-Type': 'application/json',
+        'x-api-key': 'cd6631d9-484b-4805-9cb1-34c7b6cd8209',
         ...options.headers,
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       };
@@ -226,9 +227,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loadData();
       }, 500);
 
-      // Non-blocking Firestore background sync so network delays never freeze the UI!
-      setDoc(doc(db, 'users', formattedUser.userId), formattedUser, { merge: true }).catch(() => {});
-
       return { success: true };
     } catch (err: any) {
       console.log('Login error:', err?.message);
@@ -304,8 +302,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUsers(updated);
       setCurrentUser(newUser);
 
-      // Non-blocking Firestore background sync so network delays never freeze the UI!
-      setDoc(doc(db, 'users', newUser.userId), newUser).catch(() => {});
+
 
       const generatedCode = createdUserObj.accesscode || '123456';
 
@@ -363,7 +360,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await AsyncStorage.setItem('vb_user_profile', JSON.stringify(refreshed)).catch(() => {});
       }
     }
-    await setDoc(doc(db, 'users', userId), updates, { merge: true }).catch(() => { });
   }
 
   function searchUsers(query: string): User[] {
