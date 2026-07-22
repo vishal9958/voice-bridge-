@@ -2265,10 +2265,20 @@ exports.searchSpeaker = asyncHandler(async (req, res, next) => {
     const { speakerID } = req.query;
 
     if (!speakerID) {
-      return res.status(400).json({
-        success: false,
-        msg: "speakerID query parameter is required",
-        data: null,
+      // Return 100 most recent active vendors (speakers) excluding the requesting user
+      const speakers = await User.find({
+        isactive: true,
+        role: "Vendor",
+        _id: { $ne: req.user._id }
+      })
+      .select("speakerID name mobile state district age gender qualification language knownlanguages consentlanguage createdOn")
+      .sort({ _id: -1 })
+      .limit(100);
+
+      return res.status(200).json({
+        success: true,
+        msg: "Speakers list fetched",
+        data: speakers,
       });
     }
 
@@ -2282,9 +2292,12 @@ exports.searchSpeaker = asyncHandler(async (req, res, next) => {
 
     const speaker = await User.findOne({
       isactive: true,
-      //phase: 3,
       role: "Vendor",
-      speakerID: speakerID,
+      $or: [
+        { speakerID: speakerID },
+        { mobile: speakerID },
+        { name: speakerID }
+      ]
     });
 
     if (!speaker) {
@@ -2298,11 +2311,7 @@ exports.searchSpeaker = asyncHandler(async (req, res, next) => {
     return res.status(200).json({
       success: true,
       msg: "Speaker found",
-      data: {
-        speakerID: speaker.speakerID,
-        name: speaker.name,
-        mobile: speaker.mobile,
-      },
+      data: speaker,
     });
   } catch (err) {
     console.error("searchSpeaker error:", err);
