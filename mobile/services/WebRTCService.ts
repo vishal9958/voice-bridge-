@@ -11,11 +11,25 @@ const ICE_SERVERS_CONFIG = {
   iceServers: [
     {
       urls: [
+        'stun:stun.l.google.com:19302',
         'stun:stun1.l.google.com:19302',
         'stun:stun2.l.google.com:19302',
+        'stun:stun3.l.google.com:19302',
+        'stun:stun4.l.google.com:19302',
+        'stun:global.stun.twilio.com:3478',
       ],
     },
+    {
+      urls: [
+        'turn:openrelay.metered.ca:80',
+        'turn:openrelay.metered.ca:443',
+        'turn:openrelay.metered.ca:443?transport=tcp',
+      ],
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
   ],
+  iceCandidatePoolSize: 10,
 };
 
 export class WebRTCService {
@@ -116,7 +130,10 @@ export class WebRTCService {
     };
 
     // 4. Create offer and set local description
-    const offerDescription = await pc.createOffer();
+    const offerDescription = await pc.createOffer({
+      offerToReceiveAudio: true,
+      offerToReceiveVideo: false,
+    });
     await pc.setLocalDescription(offerDescription);
 
     // 5. Upload offer via Socket make-call
@@ -251,7 +268,10 @@ export class WebRTCService {
     }
 
     // 7. Create answer and set local description
-    const answerDescription = await pc.createAnswer();
+    const answerDescription = await pc.createAnswer({
+      offerToReceiveAudio: true,
+      offerToReceiveVideo: false,
+    });
     await pc.setLocalDescription(answerDescription);
 
     // 8. Upload answer via accept-call
