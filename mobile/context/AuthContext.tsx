@@ -45,7 +45,7 @@ function makeId(): string {
   return Date.now().toString() + Math.random().toString(36).substring(2, 9);
 }
 
-const LIVE_BACKEND_URL = 'https://recordingapi.evaakya.com/api';
+const LIVE_BACKEND_URL = 'https://voice-bridge-106w.onrender.com/api';
 
 let globalJwtToken: string | null = null;
 

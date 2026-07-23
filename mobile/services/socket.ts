@@ -1,7 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const LIVE_SOCKET_URL = 'https://recordingapi.evaakya.com';
+const LIVE_SOCKET_URL = 'https://voice-bridge-106w.onrender.com';
 
 let socket: Socket | null = null;
 
