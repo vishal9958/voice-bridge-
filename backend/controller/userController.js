@@ -2256,6 +2256,68 @@ exports.getSelf = asyncHandler(async (req, res, next) => {
   }
 });
 
+//@desc     CreatePair
+//@route    POST /api/deletepair/
+//@access   Private
+//@usedBy   Audio Recording App
+exports.deletePair = asyncHandler(async (req, res, next) => {
+  try {
+    const { pairId } = req.params;
+
+    if (!pairId) {
+      return res.status(400).json({
+        success: false,
+        msg: "Pair Id is required",
+        data: null,
+      });
+    }
+
+    const pair = await SpeakerPair.findOne({
+      _id: pairId,
+      isActive: true,
+    });
+
+    if (!pair) {
+      return res.status(404).json({
+        success: false,
+        msg: "Pair not found",
+        data: null,
+      });
+    }
+
+    const isOwner =
+      pair.requester.speakerID === req.user.speakerID ||
+      pair.partner.speakerID === req.user.speakerID;
+
+    if (!isOwner) {
+      return res.status(403).json({
+        success: false,
+        msg: "You are not authorized to delete this pair",
+        data: null,
+      });
+    }
+
+    if (pair.hasSubmittedRecording) {
+      return res.status(400).json({
+        success: false,
+        msg: "You cannot delete a pair with a submitted recording",
+        data: null,
+      });
+    }
+
+    await SpeakerPair.findByIdAndDelete(pairId);
+
+    return res.status(200).json({
+      success: true,
+      msg: "Pair deleted successfully",
+      data: null,
+    });
+  } catch (err) {
+    console.error("deletePair error:", err);
+    return next(new ErrorResponse("Pair deletion failed", [], 500));
+  }
+});
+
 //@desc     Searchspeaker
 //@route    GET /api/searchspeaker/
 //@access   Private
@@ -2271,9 +2333,9 @@ exports.searchSpeaker = asyncHandler(async (req, res, next) => {
         role: "Vendor",
         _id: { $ne: req.user._id }
       })
-      .select("speakerID name mobile state district age gender qualification language knownlanguages consentlanguage createdOn")
-      .sort({ _id: -1 })
-      .limit(100);
+        .select("speakerID name mobile state district age gender qualification language knownlanguages consentlanguage createdOn")
+        .sort({ _id: -1 })
+        .limit(100);
 
       return res.status(200).json({
         success: true,

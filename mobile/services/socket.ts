@@ -1,12 +1,24 @@
 import { io, Socket } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 
-const SOCKET_URLS = [
-  'http://localhost:5000',
-  'http://172.20.65.219:5000',
-  'http://10.0.2.2:5000',
-  'https://recordingapi.evaakya.com',
-];
+function getSocketUrls(): string[] {
+  const urls: string[] = [
+    'https://recordingapi.evaakya.com',
+  ];
+  const hostUri = Constants.expoConfig?.hostUri || (Constants as any).manifest?.debuggerHost;
+  if (hostUri) {
+    const ip = hostUri.split(':')[0];
+    if (ip && ip !== 'localhost' && ip !== '127.0.0.1') {
+      urls.push(`http://${ip}:5000`);
+    }
+  }
+  urls.push('http://localhost:5000');
+  urls.push('http://192.168.100.183:5000');
+  urls.push('http://172.20.65.219:5000');
+  urls.push('http://10.0.2.2:5000');
+  return Array.from(new Set(urls));
+}
 
 let socket: Socket | null = null;
 
@@ -15,8 +27,9 @@ export async function getSocket(): Promise<Socket> {
     return socket;
   }
 
+  const socketUrls = getSocketUrls();
   // Attempt connection using fallback URLs
-  for (const url of SOCKET_URLS) {
+  for (const url of socketUrls) {
     try {
       console.log(`[Socket Client] Trying to connect to: ${url}`);
       const s = io(url, {

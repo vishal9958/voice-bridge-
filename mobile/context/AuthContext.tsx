@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 
 
 export interface User {
@@ -34,7 +35,7 @@ interface AuthContextType {
   searchUsers: (query: string) => User[];
 }
 
-const AuthContext = createContext<AuthContextType | null>(null);
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const USERS_KEY = 'vb_users';
 const CURRENT_USER_KEY = 'vb_current_user';
@@ -43,12 +44,23 @@ function makeId(): string {
   return Date.now().toString() + Math.random().toString(36).substring(2, 9);
 }
 
-const BACKEND_URLS = [
-  'http://localhost:5000/api',
-  'http://172.20.65.219:5000/api',
-  'http://10.0.2.2:5000/api',
-  'https://recordingapi.evaakya.com/api',
-];
+function getBackendUrls(): string[] {
+  const urls: string[] = [
+    'https://recordingapi.evaakya.com/api',
+  ];
+  const hostUri = Constants.expoConfig?.hostUri || (Constants as any).manifest?.debuggerHost;
+  if (hostUri) {
+    const ip = hostUri.split(':')[0];
+    if (ip && ip !== 'localhost' && ip !== '127.0.0.1') {
+      urls.push(`http://${ip}:5000/api`);
+    }
+  }
+  urls.push('http://localhost:5000/api');
+  urls.push('http://192.168.100.183:5000/api');
+  urls.push('http://172.20.65.219:5000/api');
+  urls.push('http://10.0.2.2:5000/api');
+  return Array.from(new Set(urls));
+}
 
 let globalJwtToken: string | null = null;
 
@@ -58,7 +70,8 @@ async function tryBackendFetch(endpoint: string, options: any = {}) {
     globalJwtToken = token;
   }
 
-  for (const baseUrl of BACKEND_URLS) {
+  const backendUrls = getBackendUrls();
+  for (const baseUrl of backendUrls) {
     try {
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
