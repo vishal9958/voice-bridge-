@@ -123,36 +123,42 @@ io.on("connection", (socket) => {
 
   socket.on("register-user", (userId) => {
     if (userId) {
-      userSocketMap.set(userId, socket.id);
-      socket.userId = userId;
-      console.log(`[Socket] Registered user: ${userId} to socket ${socket.id}`);
+      const normalizedId = String(userId).toLowerCase().trim();
+      userSocketMap.set(normalizedId, socket.id);
+      socket.userId = normalizedId;
+      console.log(`[Socket] Registered user: ${normalizedId} (raw: ${userId}) to socket ${socket.id}`);
     }
   });
 
   socket.on("make-call", (payload) => {
     const { participantId } = payload;
-    const targetSocketId = userSocketMap.get(participantId);
+    const normalizedTarget = String(participantId).toLowerCase().trim();
+    const targetSocketId = userSocketMap.get(normalizedTarget);
     if (targetSocketId) {
       console.log(`[Socket] Routing call from ${payload.hostId} to ${participantId}`);
       io.to(targetSocketId).emit("incoming-call", payload);
     } else {
-      console.log(`[Socket] Callee ${participantId} is offline.`);
+      console.log(`[Socket] Callee ${participantId} (normalized: ${normalizedTarget}) is offline.`);
       socket.emit("call-failed", { reason: "User offline", participantId });
     }
   });
 
   socket.on("accept-call", (payload) => {
     const { hostId } = payload;
-    const targetSocketId = userSocketMap.get(hostId);
+    const normalizedTarget = String(hostId).toLowerCase().trim();
+    const targetSocketId = userSocketMap.get(normalizedTarget);
     if (targetSocketId) {
       console.log(`[Socket] Routing call acceptance to host ${hostId}`);
       io.to(targetSocketId).emit("call-accepted", payload);
+    } else {
+      console.log(`[Socket] Host ${hostId} (normalized: ${normalizedTarget}) NOT found for call-accepted`);
     }
   });
 
   socket.on("send-ice-candidate", (payload) => {
     const { targetId } = payload;
-    const targetSocketId = userSocketMap.get(targetId);
+    const normalizedTarget = String(targetId).toLowerCase().trim();
+    const targetSocketId = userSocketMap.get(normalizedTarget);
     if (targetSocketId) {
       io.to(targetSocketId).emit("ice-candidate", payload);
     }
@@ -160,7 +166,8 @@ io.on("connection", (socket) => {
 
   socket.on("end-call", (payload) => {
     const { targetId } = payload;
-    const targetSocketId = userSocketMap.get(targetId);
+    const normalizedTarget = String(targetId).toLowerCase().trim();
+    const targetSocketId = userSocketMap.get(normalizedTarget);
     if (targetSocketId) {
       console.log(`[Socket] Relay call-ended to peer ${targetId}`);
       io.to(targetSocketId).emit("call-ended", payload);
