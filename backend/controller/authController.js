@@ -146,8 +146,8 @@ exports.login = asyncHandler(async (req, res, next) => {
       });
     }
   } catch (err) {
-    console.log("err", err);
-    return next(new ErrorResponse(`Login failed!`, [], 500));
+    console.log("login err:", err);
+    return next(err);
   }
 });
 

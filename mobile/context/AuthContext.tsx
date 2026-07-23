@@ -349,50 +349,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  let searchDebounceTimer: any = null;
+  let lastSearchedQuery = '';
+
   function searchUsers(query: string): User[] {
     const q = query.trim().toLowerCase();
     
-    // Background query MongoDB if query is typed (trying /searchspeaker then /user/searchspeaker)
-    if (q.length >= 6) {
-      const searchFn = async () => {
-        let res = await tryBackendFetch(`/searchspeaker?speakerID=${query.trim()}`);
-        if (!res || !res.ok) {
-          res = await tryBackendFetch(`/user/searchspeaker?speakerID=${query.trim()}`);
-        }
-        if (res && res.ok) {
-          const resData = await res.json();
-          if (resData.success && resData.data) {
-            const list = Array.isArray(resData.data) ? resData.data : [resData.data];
-            const fetchedSpeakers: User[] = list.map((apiUser: any) => ({
-              userId: apiUser.speakerID || apiUser.id || apiUser._id || makeId(),
-              fullName: apiUser.name || apiUser.fullName || 'Speaker',
-              age: apiUser.age || 25,
-              gender: apiUser.gender || 'Male',
-              state: apiUser.state || '',
-              district: apiUser.district || '',
-              pincode: apiUser.pincode || '',
-              qualification: apiUser.qualification || '',
-              recordingLanguages: apiUser.recordingLanguages || [apiUser.language || 'Hindi'],
-              knownLanguages: apiUser.knownLanguages || [apiUser.knownlanguages || 'Hindi'],
-              consentLanguage: apiUser.consentLanguage || apiUser.consentlanguage || 'Hindi',
-              mobile: apiUser.mobile || '',
-              coordinator: apiUser.coordinatorName || apiUser.coordinator || '',
-              createdAt: apiUser.createdAt || apiUser.createdOn || new Date().toISOString(),
-              voiceVerified: apiUser.voiceVerified !== false,
-            }));
+    // Background query MongoDB if query is typed (with 350ms debounce to prevent character-by-character network spam)
+    if (q.length >= 6 && q !== lastSearchedQuery) {
+      if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = setTimeout(() => {
+        lastSearchedQuery = q;
+        tryBackendFetch(`/searchspeaker?speakerID=${encodeURIComponent(query.trim())}`)
+          .then(async (res) => {
+            if (res && res.ok) {
+              const resData = await res.json();
+              if (resData.success && resData.data) {
+                const list = Array.isArray(resData.data) ? resData.data : [resData.data];
+                const fetchedSpeakers: User[] = list.map((apiUser: any) => ({
+                  userId: apiUser.speakerID || apiUser.id || apiUser._id || makeId(),
+                  fullName: apiUser.name || apiUser.fullName || 'Speaker',
+                  age: apiUser.age || 25,
+                  gender: apiUser.gender || 'Male',
+                  state: apiUser.state || '',
+                  district: apiUser.district || '',
+                  pincode: apiUser.pincode || '',
+                  qualification: apiUser.qualification || '',
+                  recordingLanguages: apiUser.recordingLanguages || [apiUser.language || 'Hindi'],
+                  knownLanguages: apiUser.knownLanguages || [apiUser.knownlanguages || 'Hindi'],
+                  consentLanguage: apiUser.consentLanguage || apiUser.consentlanguage || 'Hindi',
+                  mobile: apiUser.mobile || '',
+                  coordinator: apiUser.coordinatorName || apiUser.coordinator || '',
+                  createdAt: apiUser.createdAt || apiUser.createdOn || new Date().toISOString(),
+                  voiceVerified: apiUser.voiceVerified !== false,
+                }));
 
-            setUsers((prev) => {
-              const map = new Map<string, User>();
-              prev.forEach((u) => map.set(u.userId, u));
-              fetchedSpeakers.forEach((u) => map.set(u.userId, u));
-              const newUsers = Array.from(map.values());
-              AsyncStorage.setItem(USERS_KEY, JSON.stringify(newUsers)).catch(() => {});
-              return newUsers;
-            });
-          }
-        }
-      };
-      searchFn().catch(() => {});
+                setUsers((prev) => {
+                  const map = new Map<string, User>();
+                  prev.forEach((u) => map.set(u.userId, u));
+                  fetchedSpeakers.forEach((u) => map.set(u.userId, u));
+                  const newUsers = Array.from(map.values());
+                  AsyncStorage.setItem(USERS_KEY, JSON.stringify(newUsers)).catch(() => {});
+                  return newUsers;
+                });
+              }
+            }
+          })
+          .catch(() => {});
+      }, 350);
     }
 
     if (!q) {

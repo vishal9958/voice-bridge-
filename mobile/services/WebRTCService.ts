@@ -131,23 +131,40 @@ export class WebRTCService {
       },
     });
 
-    // 6. Listen for remote answer
-    socket.on('call-accepted', (payload: any) => {
+    // 6. Listen for remote answer & process queued candidates
+    socket.on('call-accepted', async (payload: any) => {
       if (payload.roomId === roomId && payload.answer && !pc.remoteDescription) {
-        const answerDescription = new RTCSessionDescription(payload.answer);
-        pc.setRemoteDescription(answerDescription).catch((err: any) =>
-          console.error('Error setting remote description from answer:', err)
-        );
+        try {
+          const answerDescription = new RTCSessionDescription(payload.answer);
+          await pc.setRemoteDescription(answerDescription);
+          console.log('[WebRTC Host] Remote description set from answer successfully');
+          // Process any queued callee candidates
+          while (pendingCandidates.length > 0) {
+            const cand = pendingCandidates.shift();
+            await pc.addIceCandidate(cand).catch((err: any) =>
+              console.error('Error adding queued callee candidate:', err)
+            );
+          }
+        } catch (err: any) {
+          console.error('Error setting remote description from answer:', err);
+        }
       }
     });
+
+    const pendingCandidates: RTCIceCandidate[] = [];
 
     // 7. Listen for callee (participant) ICE candidates
     socket.on('ice-candidate', (payload: any) => {
       if (payload.roomId === roomId && payload.candidate) {
         const candidate = new RTCIceCandidate(payload.candidate);
-        pc.addIceCandidate(candidate).catch((err: any) =>
-          console.error('Error adding callee candidate:', err)
-        );
+        if (pc.remoteDescription) {
+          pc.addIceCandidate(candidate).catch((err: any) =>
+            console.error('Error adding callee candidate:', err)
+          );
+        } else {
+          console.log('[WebRTC Host] Queuing candidate until remote description is set');
+          pendingCandidates.push(candidate);
+        }
       }
     });
 
@@ -196,13 +213,20 @@ export class WebRTCService {
       }
     };
 
+    const pendingCandidates: RTCIceCandidate[] = [];
+
     // 4. Listen for host ICE candidates
     socket.on('ice-candidate', (payload: any) => {
       if (payload.roomId === roomId && payload.candidate) {
         const candidate = new RTCIceCandidate(payload.candidate);
-        pc.addIceCandidate(candidate).catch((err: any) =>
-          console.error('Error adding caller candidate:', err)
-        );
+        if (pc.remoteDescription) {
+          pc.addIceCandidate(candidate).catch((err: any) =>
+            console.error('Error adding caller candidate:', err)
+          );
+        } else {
+          console.log('[WebRTC Callee] Queuing candidate until remote description is set');
+          pendingCandidates.push(candidate);
+        }
       }
     });
 
@@ -216,6 +240,15 @@ export class WebRTCService {
 
     // 6. Set remote description from Host Offer
     await pc.setRemoteDescription(new RTCSessionDescription(offer));
+    console.log('[WebRTC Callee] Remote description set from offer successfully');
+
+    // Process queued candidates
+    while (pendingCandidates.length > 0) {
+      const cand = pendingCandidates.shift();
+      await pc.addIceCandidate(cand).catch((err: any) =>
+        console.error('Error adding queued caller candidate:', err)
+      );
+    }
 
     // 7. Create answer and set local description
     const answerDescription = await pc.createAnswer();
