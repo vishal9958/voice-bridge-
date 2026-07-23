@@ -44,23 +44,7 @@ function makeId(): string {
   return Date.now().toString() + Math.random().toString(36).substring(2, 9);
 }
 
-function getBackendUrls(): string[] {
-  const urls: string[] = [
-    'https://recordingapi.evaakya.com/api',
-  ];
-  const hostUri = Constants.expoConfig?.hostUri || (Constants as any).manifest?.debuggerHost;
-  if (hostUri) {
-    const ip = hostUri.split(':')[0];
-    if (ip && ip !== 'localhost' && ip !== '127.0.0.1') {
-      urls.push(`http://${ip}:5000/api`);
-    }
-  }
-  urls.push('http://localhost:5000/api');
-  urls.push('http://192.168.100.183:5000/api');
-  urls.push('http://172.20.65.219:5000/api');
-  urls.push('http://10.0.2.2:5000/api');
-  return Array.from(new Set(urls));
-}
+const LIVE_BACKEND_URL = 'https://recordingapi.evaakya.com/api';
 
 let globalJwtToken: string | null = null;
 
@@ -70,38 +54,34 @@ async function tryBackendFetch(endpoint: string, options: any = {}) {
     globalJwtToken = token;
   }
 
-  const backendUrls = getBackendUrls();
-  for (const baseUrl of backendUrls) {
-    try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'x-api-key': 'cd6631d9-484b-4805-9cb1-34c7b6cd8209',
-        ...(options.headers || {}),
-      };
+  try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'x-api-key': 'cd6631d9-484b-4805-9cb1-34c7b6cd8209',
+      ...(options.headers || {}),
+    };
 
-      if (token) {
-        headers['Authorization'] = `Bearer ${token.trim()}`;
-      }
-
-      console.log(`[API Fetch] Connecting to: ${baseUrl}${endpoint} (Bearer Token: ${token ? 'PRESENT' : 'MISSING'})`);
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
-
-      const response = await fetch(`${baseUrl}${endpoint}`, {
-        ...options,
-        headers,
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-      console.log(`[API Fetch] Status ${response.status} from ${baseUrl}${endpoint}`);
-      if (response.ok || response.status === 200 || response.status === 201) {
-        return response;
-      }
-      console.log(`[API Fetch] Unsuccessful response ${response.status} from ${baseUrl}${endpoint}, trying next fallback...`);
-    } catch (err: any) {
-      console.log(`[API Fetch] Failed connecting to ${baseUrl}${endpoint}:`, err?.message);
+    if (token) {
+      headers['Authorization'] = `Bearer ${token.trim()}`;
     }
+
+    console.log(`[API Fetch] Connecting to: ${LIVE_BACKEND_URL}${endpoint} (Bearer Token: ${token ? 'PRESENT' : 'MISSING'})`);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
+    const response = await fetch(`${LIVE_BACKEND_URL}${endpoint}`, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    console.log(`[API Fetch] Status ${response.status} from ${LIVE_BACKEND_URL}${endpoint}`);
+    if (response.ok || response.status === 200 || response.status === 201) {
+      return response;
+    }
+  } catch (err: any) {
+    console.log(`[API Fetch] Failed connecting to ${LIVE_BACKEND_URL}${endpoint}:`, err?.message);
   }
   return null;
 }
