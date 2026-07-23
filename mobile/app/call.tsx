@@ -13,6 +13,7 @@ import * as Haptics from 'expo-haptics';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { RTCView } from 'react-native-webrtc';
 import { useColors } from '@/hooks/useColors';
 import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
@@ -79,6 +80,9 @@ export default function CallScreen() {
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
+        shouldDuckAndroid: false,
+        playThroughEarpieceAndroid: false,
       });
       const { recording } = await Audio.Recording.createAsync(
         Audio.RecordingOptionsPresets.HIGH_QUALITY,
@@ -119,6 +123,10 @@ export default function CallScreen() {
                 });
               }, 1000);
             }
+          } else if (state === 'disconnected' || state === 'failed' || state === 'closed') {
+            console.log('[CallScreen] Call ended or disconnected by peer');
+            if (timerRef.current) clearInterval(timerRef.current);
+            setCallStatus('ended');
           }
         };
 
@@ -269,6 +277,14 @@ export default function CallScreen() {
 
   return (
     <View style={[s.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+      {remoteStream && (
+        <RTCView
+          streamURL={remoteStream.toURL()}
+          style={{ width: 1, height: 1, position: 'absolute', opacity: 0 }}
+          objectFit="cover"
+          zOrder={0}
+        />
+      )}
       {callStatus === 'connecting' && (
         <View style={s.connectingOverlay}>
           <View style={[s.connectingPulse, getDisplayStatus(webrtcState) === 'Failed' && { backgroundColor: 'rgba(211,47,47,0.2)' }]}>
