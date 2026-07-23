@@ -73,11 +73,22 @@ export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { currentUser, users, searchUsers, logout } = useAuth();
+  const { currentUser, users, searchUsers, fetchSpeakerFromBackend, logout } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [incomingCall, setIncomingCall] = useState<any>(null);
   const results = searchUsers(searchQuery);
   const s = styles(colors);
+
+  // Debounced Speaker Search from Backend (Only fires AFTER user stops typing, e.g. 500ms pause)
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length >= 6) {
+      const timer = setTimeout(() => {
+        fetchSpeakerFromBackend(q);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [searchQuery]);
 
   useEffect(() => {
     if (!currentUser) return;

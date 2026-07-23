@@ -105,7 +105,7 @@ export default function CallScreen() {
           console.log('WebRTC State:', state);
           setWebrtcState(state);
 
-          if (state === 'connected') {
+          if (state === 'connected' || state === 'completed') {
             setCallStatus('connected');
             startRecording();
             
@@ -126,6 +126,18 @@ export default function CallScreen() {
           if (!isActive) return;
           console.log('Remote stream received');
           setRemoteStream(stream);
+          setCallStatus('connected');
+          startRecording();
+          if (!timerRef.current) {
+            timerRef.current = setInterval(() => {
+              setCallTimer((t) => {
+                if (t >= MAX_DURATION_S) {
+                  handleDisconnect();
+                }
+                return t + 1;
+              });
+            }, 1000);
+          }
         };
 
         if (host) {

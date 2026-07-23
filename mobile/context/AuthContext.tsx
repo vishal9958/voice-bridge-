@@ -33,6 +33,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   updateUser: (userId: string, updates: Partial<User>) => Promise<void>;
   searchUsers: (query: string) => User[];
+  fetchSpeakerFromBackend: (query: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -349,56 +350,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  let searchDebounceTimer: any = null;
-  let lastSearchedQuery = '';
+  async function fetchSpeakerFromBackend(query: string) {
+    const q = query.trim();
+    if (q.length < 6) return;
+
+    try {
+      console.log(`[Backend Speaker Search] Searching speaker: ${q}`);
+      const res = await tryBackendFetch(`/searchspeaker?speakerID=${encodeURIComponent(q)}`);
+      if (res && res.ok) {
+        const resData = await res.json();
+        if (resData.success && resData.data) {
+          const list = Array.isArray(resData.data) ? resData.data : [resData.data];
+          const fetchedSpeakers: User[] = list.map((apiUser: any) => ({
+            userId: apiUser.speakerID || apiUser.id || apiUser._id || makeId(),
+            fullName: apiUser.name || apiUser.fullName || 'Speaker',
+            age: apiUser.age || 25,
+            gender: apiUser.gender || 'Male',
+            state: apiUser.state || '',
+            district: apiUser.district || '',
+            pincode: apiUser.pincode || '',
+            qualification: apiUser.qualification || '',
+            recordingLanguages: apiUser.recordingLanguages || [apiUser.language || 'Hindi'],
+            knownLanguages: apiUser.knownLanguages || [apiUser.knownlanguages || 'Hindi'],
+            consentLanguage: apiUser.consentLanguage || apiUser.consentlanguage || 'Hindi',
+            mobile: apiUser.mobile || '',
+            coordinator: apiUser.coordinatorName || apiUser.coordinator || '',
+            createdAt: apiUser.createdAt || apiUser.createdOn || new Date().toISOString(),
+            voiceVerified: apiUser.voiceVerified !== false,
+          }));
+
+          setUsers((prev) => {
+            const map = new Map<string, User>();
+            prev.forEach((u) => map.set(u.userId, u));
+            fetchedSpeakers.forEach((u) => map.set(u.userId, u));
+            const newUsers = Array.from(map.values());
+            AsyncStorage.setItem(USERS_KEY, JSON.stringify(newUsers)).catch(() => {});
+            return newUsers;
+          });
+        }
+      }
+    } catch (err: any) {
+      console.log('[Backend Speaker Search Error]:', err?.message);
+    }
+  }
 
   function searchUsers(query: string): User[] {
     const q = query.trim().toLowerCase();
-    
-    // Background query MongoDB if query is typed (with 350ms debounce to prevent character-by-character network spam)
-    if (q.length >= 6 && q !== lastSearchedQuery) {
-      if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
-      searchDebounceTimer = setTimeout(() => {
-        lastSearchedQuery = q;
-        tryBackendFetch(`/searchspeaker?speakerID=${encodeURIComponent(query.trim())}`)
-          .then(async (res) => {
-            if (res && res.ok) {
-              const resData = await res.json();
-              if (resData.success && resData.data) {
-                const list = Array.isArray(resData.data) ? resData.data : [resData.data];
-                const fetchedSpeakers: User[] = list.map((apiUser: any) => ({
-                  userId: apiUser.speakerID || apiUser.id || apiUser._id || makeId(),
-                  fullName: apiUser.name || apiUser.fullName || 'Speaker',
-                  age: apiUser.age || 25,
-                  gender: apiUser.gender || 'Male',
-                  state: apiUser.state || '',
-                  district: apiUser.district || '',
-                  pincode: apiUser.pincode || '',
-                  qualification: apiUser.qualification || '',
-                  recordingLanguages: apiUser.recordingLanguages || [apiUser.language || 'Hindi'],
-                  knownLanguages: apiUser.knownLanguages || [apiUser.knownlanguages || 'Hindi'],
-                  consentLanguage: apiUser.consentLanguage || apiUser.consentlanguage || 'Hindi',
-                  mobile: apiUser.mobile || '',
-                  coordinator: apiUser.coordinatorName || apiUser.coordinator || '',
-                  createdAt: apiUser.createdAt || apiUser.createdOn || new Date().toISOString(),
-                  voiceVerified: apiUser.voiceVerified !== false,
-                }));
-
-                setUsers((prev) => {
-                  const map = new Map<string, User>();
-                  prev.forEach((u) => map.set(u.userId, u));
-                  fetchedSpeakers.forEach((u) => map.set(u.userId, u));
-                  const newUsers = Array.from(map.values());
-                  AsyncStorage.setItem(USERS_KEY, JSON.stringify(newUsers)).catch(() => {});
-                  return newUsers;
-                });
-              }
-            }
-          })
-          .catch(() => {});
-      }, 350);
-    }
-
     if (!q) {
       return users.filter((u: User) => u.userId !== currentUser?.userId);
     }
@@ -412,7 +409,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ currentUser, users, isLoading, login, register, logout, updateUser, searchUsers }}
+      value={{ currentUser, users, isLoading, login, register, logout, updateUser, searchUsers, fetchSpeakerFromBackend }}
     >
       {children}
     </AuthContext.Provider>
