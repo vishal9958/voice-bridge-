@@ -41,20 +41,32 @@ export async function getSocket(): Promise<Socket> {
     console.log(`[Socket Client] Connected successfully to: ${LIVE_SOCKET_URL}`);
     socket = s;
       
-      // Auto-register user if they are logged in
-      const currentId = await AsyncStorage.getItem('vb_current_user');
-      if (currentId) {
-        socket.emit('register-user', currentId);
-      }
+    // Auto-register user if they are logged in with all aliases
+    const registerWithServer = async () => {
+      try {
+        const currentId = await AsyncStorage.getItem('vb_current_user');
+        const userProfileStr = await AsyncStorage.getItem('vb_user_profile');
+        let profile: any = null;
+        if (userProfileStr) {
+          try { profile = JSON.parse(userProfileStr); } catch (e) {}
+        }
+        if (socket && (currentId || profile)) {
+          socket.emit('register-user', {
+            userId: currentId,
+            speakerID: profile?.userId || profile?.speakerID,
+            mobile: profile?.mobile,
+          });
+          console.log('[Socket Client] Registered user aliases with server:', { currentId, speakerID: profile?.userId, mobile: profile?.mobile });
+        }
+      } catch (err) {}
+    };
 
-      // Keep registration active on reconnects
-      socket.on('connect', () => {
-        AsyncStorage.getItem('vb_current_user').then((userId) => {
-          if (userId && socket) {
-            socket.emit('register-user', userId);
-          }
-        });
-      });
+    await registerWithServer();
+
+    // Keep registration active on reconnects
+    socket.on('connect', () => {
+      registerWithServer();
+    });
 
       return socket;
   } catch (err: any) {

@@ -121,13 +121,27 @@ const userSocketMap = new Map();
 io.on("connection", (socket) => {
   console.log(`[Socket] New connection: ${socket.id}`);
 
-  socket.on("register-user", (userId) => {
-    if (userId) {
-      const normalizedId = String(userId).toLowerCase().trim();
-      userSocketMap.set(normalizedId, socket.id);
-      socket.userId = normalizedId;
-      console.log(`[Socket] Registered user: ${normalizedId} (raw: ${userId}) to socket ${socket.id}`);
+  socket.on("register-user", (data) => {
+    if (!data) return;
+    const ids = [];
+    if (typeof data === "string" || typeof data === "number") {
+      ids.push(String(data));
+    } else if (typeof data === "object") {
+      if (data.userId) ids.push(String(data.userId));
+      if (data.speakerID) ids.push(String(data.speakerID));
+      if (data.mobile) ids.push(String(data.mobile));
+      if (data.id) ids.push(String(data.id));
+      if (data._id) ids.push(String(data._id));
     }
+
+    ids.forEach((idStr) => {
+      const norm = idStr.toLowerCase().trim();
+      if (norm) {
+        userSocketMap.set(norm, socket.id);
+        console.log(`[Socket] Registered user alias: ${norm} to socket ${socket.id}`);
+      }
+    });
+    socket.registeredAliases = ids;
   });
 
   socket.on("make-call", (payload) => {
@@ -176,9 +190,13 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     console.log(`[Socket] Client disconnected: ${socket.id}`);
-    if (socket.userId) {
-      userSocketMap.delete(socket.userId);
-      console.log(`[Socket] Removed mapping for user: ${socket.userId}`);
+    if (socket.registeredAliases && Array.isArray(socket.registeredAliases)) {
+      socket.registeredAliases.forEach((alias) => {
+        const norm = String(alias).toLowerCase().trim();
+        if (userSocketMap.get(norm) === socket.id) {
+          userSocketMap.delete(norm);
+        }
+      });
     }
   });
 });
