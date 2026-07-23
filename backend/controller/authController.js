@@ -306,7 +306,7 @@ exports.register = asyncHandler(async (req, res, next) => {
         longitude: req.body.longitude || 73,
         state: req.body.state || "Maharashtra",
         district: req.body.district || "Pune",
-        language: req.body.language || req.body.recordingLanguages?.[0] || "Hindi",
+        language: req.body.language || (req.body.recordingLanguages && req.body.recordingLanguages[0]) || "Hindi",
         pincode: req.body.pincode || "411001",
         phonebrand: (req.body.phonebrand || "Android").replace(/[^a-zA-Z0-9]/g, ""),
         phonemodel: (req.body.phonemodel || "Smartphone").replace(/[^a-zA-Z0-9]/g, ""),
