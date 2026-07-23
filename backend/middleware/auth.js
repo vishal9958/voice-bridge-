@@ -21,7 +21,23 @@ exports.protect = asyncHandler(async (req, res, next) => {
   if (token) {
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      req.user = await User.findById(decoded.id);
+      // Try to find user in DB
+      const dbUser = await User.findById(decoded.id);
+      if (dbUser) {
+        req.user = dbUser;
+      } else {
+        // JWT is valid but user not found in DB — trust the token payload
+        // This handles cross-environment DB mismatches gracefully
+        console.log("[Auth Middleware] Valid JWT but user not found in DB, using token payload for:", decoded.id);
+        req.user = {
+          _id: decoded.id,
+          id: decoded.id,
+          speakerID: decoded.speakerID || null,
+          role: decoded.role || "Vendor",
+          mobile: decoded.mobile || null,
+          name: decoded.name || "Speaker",
+        };
+      }
     } catch (err) {
       console.log("[Auth Middleware] Invalid JWT token, falling back to API Key check...");
     }

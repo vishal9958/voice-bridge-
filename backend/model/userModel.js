@@ -392,9 +392,19 @@ const userSchema = new mongoose.Schema({
 
 //   //Sign JWT and return
 userSchema.methods.getAuth = function () {
-  return jwt.sign({ id: this._id }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRE,
-  });
+  return jwt.sign(
+    {
+      id: this._id,
+      speakerID: this.speakerID,
+      role: this.role,
+      mobile: this.mobile,
+      name: this.name,
+    },
+    process.env.JWT_SECRET,
+    {
+      expiresIn: process.env.JWT_EXPIRE,
+    }
+  );
 };
 
 module.exports = mongoose.model("User", userSchema, "Users");
