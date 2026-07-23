@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   FlatList,
   StyleSheet,
@@ -74,21 +74,19 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { currentUser, users, searchUsers, fetchSpeakerFromBackend, logout } = useAuth();
+  const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [incomingCall, setIncomingCall] = useState<any>(null);
   const results = searchUsers(searchQuery);
   const s = styles(colors);
 
-  // Debounced Speaker Search from Backend (Only fires AFTER user stops typing, e.g. 500ms pause)
-  useEffect(() => {
-    const q = searchQuery.trim();
+  const handlePerformSearch = useCallback(() => {
+    const q = searchInput.trim();
+    setSearchQuery(q);
     if (q.length >= 6) {
-      const timer = setTimeout(() => {
-        fetchSpeakerFromBackend(q);
-      }, 500);
-      return () => clearTimeout(timer);
+      fetchSpeakerFromBackend(q);
     }
-  }, [searchQuery]);
+  }, [searchInput, fetchSpeakerFromBackend]);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -256,21 +254,39 @@ export default function HomeScreen() {
             <ProfileCard user={currentUser} colors={colors} />
 
             <Text style={s.sectionLabel}>Search Speaker</Text>
-            <View style={s.searchRow}>
-              <Feather name="search" size={18} color={colors.mutedForeground} style={{ marginRight: 8 }} />
-              <TextInput
-                style={s.searchInput}
-                placeholder="Name, mobile, or speaker ID…"
-                placeholderTextColor={colors.mutedForeground}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                autoCapitalize="none"
-              />
-              {searchQuery ? (
-                <TouchableOpacity onPress={() => setSearchQuery('')}>
-                  <Feather name="x" size={16} color={colors.mutedForeground} />
-                </TouchableOpacity>
-              ) : null}
+            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+              <View style={[s.searchRow, { flex: 1 }]}>
+                <Feather name="search" size={18} color={colors.mutedForeground} style={{ marginRight: 8 }} />
+                <TextInput
+                  style={s.searchInput}
+                  placeholder="Name, mobile, or speaker ID…"
+                  placeholderTextColor={colors.mutedForeground}
+                  value={searchInput}
+                  onChangeText={setSearchInput}
+                  onSubmitEditing={handlePerformSearch}
+                  autoCapitalize="none"
+                />
+                {searchInput ? (
+                  <TouchableOpacity onPress={() => { setSearchInput(''); setSearchQuery(''); }}>
+                    <Feather name="x" size={16} color={colors.mutedForeground} />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: colors.primary,
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                  borderRadius: 10,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+                onPress={handlePerformSearch}
+              >
+                <Feather name="search" size={16} color="#fff" />
+                <Text style={{ color: '#fff', fontWeight: '600', fontSize: 13 }}>Search</Text>
+              </TouchableOpacity>
             </View>
             {results.length > 0 && (
               <Text style={s.resultCount}>{results.length} speaker{results.length !== 1 ? 's' : ''} available</Text>
