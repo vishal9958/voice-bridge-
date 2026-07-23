@@ -67,39 +67,7 @@ function SpeakerCard({ user, onSelect, colors }: { user: User; onSelect: (u: Use
   );
 }
 
-// Tip card showing demo speakers
-function DemoTip({ colors }: { colors: ReturnType<typeof useColors> }) {
-  const [visible, setVisible] = useState(true);
-  if (!visible) return null;
-  return (
-    <View style={{
-      marginHorizontal: 16,
-      marginBottom: 12,
-      backgroundColor: colors.accent,
-      borderRadius: 10,
-      padding: 14,
-      borderWidth: 1,
-      borderColor: colors.primary + '33',
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      gap: 10,
-    }}>
-      <Feather name="users" size={16} color={colors.primary} style={{ marginTop: 1 }} />
-      <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 13, fontWeight: '700', color: colors.primary, marginBottom: 4 }}>Demo Speakers Available</Text>
-        <Text style={{ fontSize: 12, color: colors.mutedForeground, lineHeight: 18 }}>
-          Search by name or ID to find demo speakers:{'\n'}
-          <Text style={{ fontWeight: '600', color: colors.text }}>Priya Sharma</Text> · <Text style={{ fontWeight: '600', color: colors.text }}>Arjun Reddy</Text> · <Text style={{ fontWeight: '600', color: colors.text }}>Meena Iyer</Text>{'\n'}
-          <Text style={{ fontWeight: '600', color: colors.text }}>Ravi Kumar</Text> · <Text style={{ fontWeight: '600', color: colors.text }}>Fatima Sheikh</Text> · <Text style={{ fontWeight: '600', color: colors.text }}>Deepak Nair</Text>{'\n'}
-          Or search IDs: <Text style={{ fontFamily: 'monospace', color: colors.text }}>SPK-001</Text> to <Text style={{ fontFamily: 'monospace', color: colors.text }}>SPK-006</Text>
-        </Text>
-      </View>
-      <TouchableOpacity onPress={() => setVisible(false)} style={{ padding: 2 }}>
-        <Feather name="x" size={14} color={colors.mutedForeground} />
-      </TouchableOpacity>
-    </View>
-  );
-}
+
 
 export default function HomeScreen() {
   const colors = useColors();
@@ -275,8 +243,6 @@ export default function HomeScreen() {
         ListHeaderComponent={
           <View>
             <ProfileCard user={currentUser} colors={colors} />
-
-            <DemoTip colors={colors} />
 
             <Text style={s.sectionLabel}>Search Speaker</Text>
             <View style={s.searchRow}>

@@ -47,6 +47,7 @@ const {
   searchSpeaker,
   createPair,
   getMyPairs,
+  deletePair
 } = require("../controller/userController");
 
 const { protect, authorize } = require("../middleware/auth");
@@ -222,5 +223,8 @@ router.route("/getself").get(protect, authorize("Vendor"), getSelf);
 router.route("/searchspeaker").get(protect, authorize("Vendor"), searchSpeaker);
 router.route("/createpair").post(protect, authorize("Vendor"), createPair);
 router.route("/getmypairs").get(protect, authorize("Vendor"), getMyPairs);
+router
+  .route("/deletepair/:pairId")
+  .delete(protect, authorize("Vendor"), deletePair);
 
 module.exports = router;
