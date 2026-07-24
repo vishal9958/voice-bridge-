@@ -236,6 +236,7 @@ export class WebRTCService {
     // 7. Listen for participant ICE candidates
     socket.on('ice-candidate', (payload: any) => {
       if (payload.roomId !== roomId || !payload.candidate) return;
+      console.log('[WebRTC Host] Received candidate from participant over socket:', payload.candidate.candidate?.slice(0, 40));
       const candidate = new RTCIceCandidate(payload.candidate);
       if (pc.remoteDescription) {
         pc.addIceCandidate(candidate).catch((err: any) =>
@@ -305,6 +306,7 @@ export class WebRTCService {
     // 4. Listen for host ICE candidates
     socket.on('ice-candidate', (payload: any) => {
       if (payload.roomId !== roomId || !payload.candidate) return;
+      console.log('[WebRTC Callee] Received candidate from host over socket:', payload.candidate.candidate?.slice(0, 40));
       const candidate = new RTCIceCandidate(payload.candidate);
       if (pc.remoteDescription) {
         pc.addIceCandidate(candidate).catch((err: any) =>

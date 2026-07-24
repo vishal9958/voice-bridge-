@@ -4,16 +4,21 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const LIVE_SOCKET_URL = 'https://voice-bridge-106w.onrender.com';
 
 let socket: Socket | null = null;
-// Singleton promise — prevents multiple concurrent socket creation
 let connectingPromise: Promise<Socket> | null = null;
 
 export async function getSocket(): Promise<Socket> {
-  // If already connected, return immediately
-  if (socket && socket.connected) {
-    return socket;
+  // If socket exists and is connected OR connecting, return it
+  if (socket) {
+    if (socket.connected) {
+      return socket;
+    }
+    // If socket exists but disconnected, try connecting it rather than destroying it
+    if (!socket.connected && !connectingPromise) {
+      socket.connect();
+    }
   }
 
-  // If already in process of connecting, wait for that
+  // If currently creating a new socket connection, wait for it
   if (connectingPromise) {
     return connectingPromise;
   }
@@ -28,28 +33,25 @@ export async function getSocket(): Promise<Socket> {
 }
 
 async function _createSocket(): Promise<Socket> {
-  // Disconnect any stale socket
-  if (socket) {
-    try { socket.disconnect(); } catch (_) {}
-    socket = null;
+  if (socket && socket.connected) {
+    return socket;
   }
 
-  console.log(`[Socket Client] Connecting directly to live server: ${LIVE_SOCKET_URL}`);
+  console.log(`[Socket Client] Initializing connection to: ${LIVE_SOCKET_URL}`);
   const s = io(LIVE_SOCKET_URL, {
     transports: ['websocket', 'polling'],
-    timeout: 30000, // 30s — Render cold start
+    timeout: 20000,
     autoConnect: false,
     reconnection: true,
-    reconnectionDelay: 2000,
-    reconnectionAttempts: 3,
+    reconnectionDelay: 1000,
+    reconnectionAttempts: 10,
   });
   s.connect();
 
   await new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(() => {
-      s.disconnect();
-      reject(new Error('Socket connection timeout'));
-    }, 30000);
+      resolve(); // Resolve anyway so caller has socket reference
+    }, 15000);
 
     s.once('connect', () => {
       clearTimeout(timeout);
@@ -58,15 +60,15 @@ async function _createSocket(): Promise<Socket> {
 
     s.once('connect_error', (err) => {
       clearTimeout(timeout);
-      s.disconnect();
-      reject(err);
+      console.warn('[Socket Client] Initial connect warning:', err.message);
+      resolve(); // Resolve so reconnection loop can handle it
     });
   });
 
-  console.log(`[Socket Client] Connected successfully to: ${LIVE_SOCKET_URL}`);
+  console.log(`[Socket Client] Socket instance ready: ${s.id || 'connecting'}`);
   socket = s;
 
-  // Register user aliases with server
+  // Function to register user aliases
   const registerWithServer = async () => {
     try {
       const currentId = await AsyncStorage.getItem('vb_current_user');
@@ -75,32 +77,36 @@ async function _createSocket(): Promise<Socket> {
       if (userProfileStr) {
         try { profile = JSON.parse(userProfileStr); } catch (_) {}
       }
-      if (socket && (currentId || profile)) {
+      if (s && s.connected && (currentId || profile)) {
         const aliases = {
           currentId: currentId || profile?.userId,
           mobile: profile?.mobile,
           speakerID: profile?.userId || profile?.speakerID,
         };
-        socket.emit('register-user', aliases);
+        s.emit('register-user', aliases);
         console.log('[Socket Client] Registered user aliases with server:', aliases);
       }
     } catch (_) {}
   };
 
-  await registerWithServer();
+  // Register immediately if connected
+  if (s.connected) {
+    await registerWithServer();
+  }
 
-  // Re-register on reconnect
+  // Always re-register whenever socket connects or reconnects
   s.on('connect', () => {
+    console.log(`[Socket Client] Connected/Reconnected as socket ID: ${s.id}`);
     registerWithServer();
   });
 
-  return socket;
+  return s;
 }
 
 export function disconnectSocket() {
   connectingPromise = null;
   if (socket) {
-    socket.disconnect();
+    try { socket.disconnect(); } catch (_) {}
     socket = null;
   }
 }

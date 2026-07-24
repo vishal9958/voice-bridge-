@@ -174,7 +174,10 @@ io.on("connection", (socket) => {
     const normalizedTarget = String(targetId).toLowerCase().trim();
     const targetSocketId = userSocketMap.get(normalizedTarget);
     if (targetSocketId) {
+      console.log(`[Socket] Routing ICE candidate to ${normalizedTarget} (socket: ${targetSocketId})`);
       io.to(targetSocketId).emit("ice-candidate", payload);
+    } else {
+      console.log(`[Socket] WARNING: Candidate target ${normalizedTarget} not found in userSocketMap!`);
     }
   });
 
