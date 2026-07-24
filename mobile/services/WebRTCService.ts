@@ -196,12 +196,17 @@ export class WebRTCService {
       },
     });
 
-    // Start ICE timeout — if no connection in 20s, notify caller
+    // Start ICE timeout — if no connection in 45s, notify caller
     this.startIceTimeout(() => {
       if (!this.isClosed) {
         onConnectionStateChange('failed');
       }
     });
+
+    // --- CLEANUP OLD LISTENERS TO PREVENT DUPLICATES ---
+    socket.off('call-accepted');
+    socket.off('ice-candidate');
+    socket.off('call-ended');
 
     // 6. Listen for answer from participant
     socket.on('call-accepted', async (payload: any) => {
@@ -308,6 +313,10 @@ export class WebRTCService {
       }
     });
 
+    // --- CLEANUP OLD LISTENERS TO PREVENT DUPLICATES ---
+    socket.off('ice-candidate');
+    socket.off('call-ended');
+
     // 5. Listen for call end from host
     socket.on('call-ended', (payload: any) => {
       if (payload.roomId === roomId) {
@@ -355,10 +364,31 @@ export class WebRTCService {
   }
 
   private closePeerConnection() {
+    // 2. Stop all local media tracks
+    if (this.localStream) {
+      this.localStream.getTracks().forEach((track: any) => {
+        try {
+          track.stop();
+        } catch (e) {}
+      });
+      this.localStream = null;
+    }
+
+    // 3. Clear ICE timeout
     if (this.iceTimeoutId) {
       clearTimeout(this.iceTimeoutId);
       this.iceTimeoutId = null;
     }
+
+    // 4. Remove socket listeners to prevent ghost events in future calls
+    try {
+      getSocket().then(s => {
+        s.off('call-accepted');
+        s.off('ice-candidate');
+        s.off('call-ended');
+      }).catch(() => {});
+    } catch(e) {}
+    
     if (this.peerConnection) {
       try { this.peerConnection.close(); } catch (_) { }
       this.peerConnection = null;
