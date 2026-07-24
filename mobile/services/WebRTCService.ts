@@ -9,19 +9,9 @@ import { getSocket } from './socket';
 
 const ICE_SERVERS_CONFIG = {
   iceServers: [
-    // 🚀 PRIVATE METERED.CA TURN SERVERS (MUST BE FIRST FOR LONG DISTANCE)
-    {
-      urls: 'turn:global.relay.metered.ca:80',
-      username: '814d54f299cda97987d19d53',
-      credential: 'e3i5Z4SoSU8FqUB+',
-    },
+    // 🚀 PRIVATE METERED.CA TURN SERVERS (TCP ONLY FOR JIO/AIRTEL IPv6 FIX)
     {
       urls: 'turn:global.relay.metered.ca:80?transport=tcp',
-      username: '814d54f299cda97987d19d53',
-      credential: 'e3i5Z4SoSU8FqUB+',
-    },
-    {
-      urls: 'turn:global.relay.metered.ca:443',
       username: '814d54f299cda97987d19d53',
       credential: 'e3i5Z4SoSU8FqUB+',
     },
