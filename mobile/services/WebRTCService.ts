@@ -12,13 +12,13 @@ const ICE_SERVERS_CONFIG = {
     // 🚀 PRIVATE METERED.CA TURN SERVERS (TCP ONLY FOR JIO/AIRTEL IPv6 FIX)
     {
       urls: 'turn:global.relay.metered.ca:80?transport=tcp',
-      username: '814d54f299cda97987d19d53',
-      credential: 'e3i5Z4SoSU8FqUB+',
+      username: 'b811f181f7deee52f288304d',
+      credential: 'Ai6389w/deejdtUo',
     },
     {
       urls: 'turns:global.relay.metered.ca:443?transport=tcp',
-      username: '814d54f299cda97987d19d53',
-      credential: 'e3i5Z4SoSU8FqUB+',
+      username: 'b811f181f7deee52f288304d',
+      credential: 'Ai6389w/deejdtUo',
     },
     // 🛡️ STUN FALLBACK (Crucial to keep ICE state machine 'checking' instead of instant fail)
     {
