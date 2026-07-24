@@ -12,23 +12,23 @@ const ICE_SERVERS_CONFIG = {
     // 🚀 PRIVATE METERED.CA TURN SERVERS (MUST BE FIRST FOR LONG DISTANCE)
     {
       urls: 'turn:global.relay.metered.ca:80',
-      username: '238443ad93a54db4c909d4f4',
-      credential: 'LZXBXRZFqglHXaDw',
+      username: '814d54f299cda97987d19d53',
+      credential: 'e3i5Z4SoSU8FqUB+',
     },
     {
       urls: 'turn:global.relay.metered.ca:80?transport=tcp',
-      username: '238443ad93a54db4c909d4f4',
-      credential: 'LZXBXRZFqglHXaDw',
+      username: '814d54f299cda97987d19d53',
+      credential: 'e3i5Z4SoSU8FqUB+',
     },
     {
       urls: 'turn:global.relay.metered.ca:443',
-      username: '238443ad93a54db4c909d4f4',
-      credential: 'LZXBXRZFqglHXaDw',
+      username: '814d54f299cda97987d19d53',
+      credential: 'e3i5Z4SoSU8FqUB+',
     },
     {
       urls: 'turns:global.relay.metered.ca:443?transport=tcp',
-      username: '238443ad93a54db4c909d4f4',
-      credential: 'LZXBXRZFqglHXaDw',
+      username: '814d54f299cda97987d19d53',
+      credential: 'e3i5Z4SoSU8FqUB+',
     },
     // 🛡️ STUN FALLBACK (Crucial to keep ICE state machine 'checking' instead of instant fail)
     {
