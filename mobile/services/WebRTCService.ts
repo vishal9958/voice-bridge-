@@ -9,24 +9,24 @@ import { getSocket } from './socket';
 
 const ICE_SERVERS_CONFIG = {
   iceServers: [
-    // TURN Relay Servers FIRST (Ports 80 UDP & TCP for cellular CGNAT relay)
+    // TURN Relay Servers FIRST (Ports 443 UDP & TCP for Jio/Airtel CGNAT bypass)
     {
-      urls: 'turn:openrelay.metered.ca:80',
+      urls: 'turn:openrelay.metered.ca:443',
       username: 'openrelayproject',
       credential: 'openrelayproject',
     },
     {
-      urls: 'turn:openrelay.metered.ca:80?transport=tcp',
+      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
       username: 'openrelayproject',
       credential: 'openrelayproject',
     },
     {
-      urls: 'turn:relay.metered.ca:80',
+      urls: 'turn:relay.metered.ca:443',
       username: 'openrelayproject',
       credential: 'openrelayproject',
     },
     {
-      urls: 'turn:relay.metered.ca:80?transport=tcp',
+      urls: 'turn:relay.metered.ca:443?transport=tcp',
       username: 'openrelayproject',
       credential: 'openrelayproject',
     },
@@ -87,12 +87,6 @@ export class WebRTCService {
     const pc: any = new RTCPeerConnection(ICE_SERVERS_CONFIG);
     this.peerConnection = pc;
 
-    try {
-      if (typeof pc.getConfiguration === 'function') {
-        console.log('[WebRTC Runtime Configuration]:', JSON.stringify(pc.getConfiguration()));
-      }
-    } catch (_) {}
-
     pc.onconnectionstatechange = () => {
       const state = pc.connectionState;
       console.log('[WebRTC] connectionState:', state);
@@ -111,20 +105,6 @@ export class WebRTCService {
           this.iceTimeoutId = null;
         }
       }
-    };
-
-    pc.onicegatheringstatechange = () => {
-      console.log('[WebRTC Gathering State]:', pc.iceGatheringState);
-    };
-
-    pc.onicecandidateerror = (event: any) => {
-      console.log('[WebRTC Candidate Error]:', {
-        errorCode: event?.errorCode,
-        errorText: event?.errorText,
-        url: event?.url,
-        address: event?.address,
-        port: event?.port,
-      });
     };
 
     // Listen for remote tracks
