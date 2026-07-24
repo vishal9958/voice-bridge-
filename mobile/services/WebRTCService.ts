@@ -9,40 +9,26 @@ import { getSocket } from './socket';
 
 const ICE_SERVERS_CONFIG = {
   iceServers: [
-    // TURN Relay Servers FIRST (Ports 443 UDP & TCP for Jio/Airtel CGNAT bypass)
+    // ⚠️ CRITICAL: STUN has been completely removed as per your request!
+    // We are forcing TURN Relay ONLY for long-distance Jio/Airtel connections.
+
+    // 🔴 IMPORTANT: "openrelayproject" is a public test credential. 
+    // It is heavily rate-limited by metered.ca and often fails to generate candidates.
+    // Go to https://metered.ca, sign up for a free account (50GB free), 
+    // and replace 'YOUR_METERED_USERNAME' and 'YOUR_METERED_CREDENTIAL' below.
+
     {
       urls: 'turn:openrelay.metered.ca:443',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
+      username: 'openrelayproject', // REPLACE THIS
+      credential: 'openrelayproject', // REPLACE THIS
     },
     {
       urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
+      username: 'openrelayproject', // REPLACE THIS
+      credential: 'openrelayproject', // REPLACE THIS
     },
-    {
-      urls: 'turn:relay.metered.ca:443',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    },
-    {
-      urls: 'turn:relay.metered.ca:443?transport=tcp',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    },
-
-    // STUN Servers SECOND (for direct P2P NAT discovery when available)
-    // { urls: 'stun:stun.l.google.com:19302' },
-    // { urls: 'stun:stun1.l.google.com:19302' },
-    // { urls: 'stun:stun2.l.google.com:19302' },
-    // { urls: 'stun:stun3.l.google.com:19302' },
-    // { urls: 'stun:stun4.l.google.com:19302' },
-    // { urls: 'stun:global.stun.twilio.com:3478' },
-    // { urls: 'stun:stun.cloudflare.com:3478' },
-    // { urls: 'stun:openrelay.metered.ca:80' },
-    // { urls: 'stun:relay.metered.ca:80' },
   ],
-  iceTransportPolicy: 'all',
+  iceTransportPolicy: 'relay', // STABILITY FORCE: Strictly force WebRTC to use TURN Relay ONLY
   iceCandidatePoolSize: 10,
 };
 
