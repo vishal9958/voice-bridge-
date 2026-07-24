@@ -9,26 +9,27 @@ import { getSocket } from './socket';
 
 const ICE_SERVERS_CONFIG = {
   iceServers: [
-    // Google STUN servers
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-    // Metered TURN relay — required for mobile-to-mobile across networks
+    // Google & Twilio STUN servers for direct NAT traversal
     {
       urls: [
-        'turn:a.relay.metered.ca:80',
-        'turn:a.relay.metered.ca:80?transport=tcp',
-        'turn:a.relay.metered.ca:443',
-        'turn:a.relay.metered.ca:443?transport=tcp',
+        'stun:stun.l.google.com:19302',
+        'stun:stun1.l.google.com:19302',
+        'stun:stun2.l.google.com:19302',
+        'stun:stun3.l.google.com:19302',
+        'stun:stun4.l.google.com:19302',
+        'stun:global.stun.twilio.com:3478',
+        'stun:openrelay.metered.ca:80',
       ],
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
     },
+    // Metered TURN Relay — essential for mobile data / cross-region / CGNAT (Jio, Airtel, etc.)
     {
       urls: [
         'turn:openrelay.metered.ca:80',
+        'turn:openrelay.metered.ca:80?transport=tcp',
         'turn:openrelay.metered.ca:443',
         'turn:openrelay.metered.ca:443?transport=tcp',
+        'turns:openrelay.metered.ca:443',
+        'turns:openrelay.metered.ca:443?transport=tcp',
       ],
       username: 'openrelayproject',
       credential: 'openrelayproject',
