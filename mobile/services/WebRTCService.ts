@@ -9,7 +9,7 @@ import { getSocket } from './socket';
 
 const ICE_SERVERS_CONFIG = {
   iceServers: [
-    // Google & Twilio STUN servers for direct NAT traversal
+    // Primary Google, Twilio, Cloudflare & Mozilla STUN servers
     {
       urls: [
         'stun:stun.l.google.com:19302',
@@ -18,10 +18,13 @@ const ICE_SERVERS_CONFIG = {
         'stun:stun3.l.google.com:19302',
         'stun:stun4.l.google.com:19302',
         'stun:global.stun.twilio.com:3478',
+        'stun:stun.cloudflare.com:3478',
+        'stun:stun.services.mozilla.com',
         'stun:openrelay.metered.ca:80',
+        'stun:openrelay.metered.ca:443',
       ],
     },
-    // Metered TURN Relay — essential for mobile data / cross-region / CGNAT (Jio, Airtel, etc.)
+    // Metered TURN Relay (UDP, TCP, and SSL/TLS 443 & 5349 for Cellular CGNAT & Firewalls)
     {
       urls: [
         'turn:openrelay.metered.ca:80',
@@ -30,9 +33,20 @@ const ICE_SERVERS_CONFIG = {
         'turn:openrelay.metered.ca:443?transport=tcp',
         'turns:openrelay.metered.ca:443',
         'turns:openrelay.metered.ca:443?transport=tcp',
+        'turns:openrelay.metered.ca:5349',
+        'turns:openrelay.metered.ca:5349?transport=tcp',
       ],
       username: 'openrelayproject',
       credential: 'openrelayproject',
+    },
+    // Backup Viagenie TURN Relay
+    {
+      urls: [
+        'turn:numb.viagenie.ca:3478',
+        'turn:numb.viagenie.ca:3478?transport=tcp',
+      ],
+      username: 'webrtc@live.com',
+      credential: 'webrtc',
     },
   ],
   iceCandidatePoolSize: 10,
