@@ -9,33 +9,56 @@ import { getSocket } from './socket';
 
 const ICE_SERVERS_CONFIG = {
   iceServers: [
-    // Fast STUN servers for direct P2P NAT discovery
+    // STUN Servers for direct NAT traversal
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
+    { urls: 'stun:global.stun.twilio.com:3478' },
+    { urls: 'stun:stun.cloudflare.com:3478' },
+    { urls: 'stun:openrelay.metered.ca:80' },
+    { urls: 'stun:standard.relay.metered.ca:80' },
+    { urls: 'stun:standard.relay.metered.ca:443' },
+
+    // TURN Relay Servers (Individual entries required for react-native-webrtc native parser)
     {
-      urls: [
-        'stun:stun.l.google.com:19302',
-        'stun:stun1.l.google.com:19302',
-        'stun:stun2.l.google.com:19302',
-        'stun:stun3.l.google.com:19302',
-        'stun:stun4.l.google.com:19302',
-        'stun:global.stun.twilio.com:3478',
-        'stun:stun.cloudflare.com:3478',
-        'stun:openrelay.metered.ca:80',
-        'stun:standard.relay.metered.ca:80',
-        'stun:standard.relay.metered.ca:443',
-      ],
+      urls: 'turn:standard.relay.metered.ca:80',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
     },
-    // Metered TURN Relays — verified active ports (80, 443, 3478 UDP/TCP) for cross-state cellular data (CGNAT)
     {
-      urls: [
-        'turn:standard.relay.metered.ca:80',
-        'turn:standard.relay.metered.ca:80?transport=tcp',
-        'turn:standard.relay.metered.ca:443',
-        'turn:standard.relay.metered.ca:443?transport=tcp',
-        'turn:standard.relay.metered.ca:3478',
-        'turn:standard.relay.metered.ca:3478?transport=tcp',
-        'turn:openrelay.metered.ca:80',
-        'turn:openrelay.metered.ca:80?transport=tcp',
-      ],
+      urls: 'turn:standard.relay.metered.ca:80?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: 'turn:standard.relay.metered.ca:443',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: 'turn:standard.relay.metered.ca:443?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: 'turn:standard.relay.metered.ca:3478',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: 'turn:standard.relay.metered.ca:3478?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:80',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:80?transport=tcp',
       username: 'openrelayproject',
       credential: 'openrelayproject',
     },
@@ -43,8 +66,8 @@ const ICE_SERVERS_CONFIG = {
   iceCandidatePoolSize: 10,
 };
 
-// ICE timeout — if not connected in 20s, fail
-const ICE_CONNECT_TIMEOUT_MS = 20000;
+// ICE timeout — increased to 45s for long-distance cellular TURN relay allocation
+const ICE_CONNECT_TIMEOUT_MS = 45000;
 
 export class WebRTCService {
   private peerConnection: any = null;
@@ -167,7 +190,7 @@ export class WebRTCService {
     // 3. ICE candidate gathering — send to participant
     pc.onicecandidate = (event: any) => {
       if (event.candidate) {
-        console.log('[WebRTC Host] Sending ICE candidate to participant');
+        console.log('[WebRTC Host] Sending ICE candidate:', event.candidate.candidate);
         socket.emit('send-ice-candidate', {
           targetId: participantId,
           candidate: event.candidate.toJSON(),
@@ -283,7 +306,7 @@ export class WebRTCService {
     // 3. ICE candidate gathering — send to host
     pc.onicecandidate = (event: any) => {
       if (event.candidate) {
-        console.log('[WebRTC Callee] Sending ICE candidate to host');
+        console.log('[WebRTC Callee] Sending ICE candidate:', event.candidate.candidate);
         socket.emit('send-ice-candidate', {
           targetId: hostId,
           candidate: event.candidate.toJSON(),
