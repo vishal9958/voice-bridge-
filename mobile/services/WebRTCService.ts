@@ -9,7 +9,7 @@ import { getSocket } from './socket';
 
 const ICE_SERVERS_CONFIG = {
   iceServers: [
-    // TURN Relay Servers FIRST — Forces WebRTC to allocate Relay TURN candidates immediately
+    // TURN Relay Servers ONLY — Required for Long-Distance Cellular Data Connections
     {
       urls: 'turn:openrelay.metered.ca:80',
       username: 'openrelayproject',
@@ -31,17 +31,13 @@ const ICE_SERVERS_CONFIG = {
       credential: 'openrelayproject',
     },
 
-    // STUN Servers SECOND (for direct P2P NAT discovery when available)
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'stun:stun3.l.google.com:19302' },
-    { urls: 'stun:stun4.l.google.com:19302' },
-    { urls: 'stun:global.stun.twilio.com:3478' },
-    { urls: 'stun:stun.cloudflare.com:3478' },
-    { urls: 'stun:openrelay.metered.ca:80' },
-    { urls: 'stun:relay.metered.ca:80' },
+    // STUN Servers Commented Out (User requested TURN RELAY ONLY)
+    // { urls: 'stun:stun.l.google.com:19302' },
+    // { urls: 'stun:stun1.l.google.com:19302' },
+    // { urls: 'stun:global.stun.twilio.com:3478' },
+    // { urls: 'stun:stun.cloudflare.com:3478' },
   ],
+  iceTransportPolicy: 'relay', // STABILITY FORCE: Strictly force WebRTC to use TURN Relay ONLY
   iceCandidatePoolSize: 10,
 };
 
