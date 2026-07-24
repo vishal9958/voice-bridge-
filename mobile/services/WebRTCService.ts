@@ -9,7 +9,7 @@ import { getSocket } from './socket';
 
 const ICE_SERVERS_CONFIG = {
   iceServers: [
-    // Primary Google, Twilio, Cloudflare & Mozilla STUN servers
+    // Fast STUN servers for direct P2P NAT discovery
     {
       urls: [
         'stun:stun.l.google.com:19302',
@@ -19,34 +19,25 @@ const ICE_SERVERS_CONFIG = {
         'stun:stun4.l.google.com:19302',
         'stun:global.stun.twilio.com:3478',
         'stun:stun.cloudflare.com:3478',
-        'stun:stun.services.mozilla.com',
         'stun:openrelay.metered.ca:80',
-        'stun:openrelay.metered.ca:443',
+        'stun:standard.relay.metered.ca:80',
+        'stun:standard.relay.metered.ca:443',
       ],
     },
-    // Metered TURN Relay (UDP, TCP, and SSL/TLS 443 & 5349 for Cellular CGNAT & Firewalls)
+    // Metered TURN Relays — verified active ports (80, 443, 3478 UDP/TCP) for cross-state cellular data (CGNAT)
     {
       urls: [
+        'turn:standard.relay.metered.ca:80',
+        'turn:standard.relay.metered.ca:80?transport=tcp',
+        'turn:standard.relay.metered.ca:443',
+        'turn:standard.relay.metered.ca:443?transport=tcp',
+        'turn:standard.relay.metered.ca:3478',
+        'turn:standard.relay.metered.ca:3478?transport=tcp',
         'turn:openrelay.metered.ca:80',
         'turn:openrelay.metered.ca:80?transport=tcp',
-        'turn:openrelay.metered.ca:443',
-        'turn:openrelay.metered.ca:443?transport=tcp',
-        'turns:openrelay.metered.ca:443',
-        'turns:openrelay.metered.ca:443?transport=tcp',
-        'turns:openrelay.metered.ca:5349',
-        'turns:openrelay.metered.ca:5349?transport=tcp',
       ],
       username: 'openrelayproject',
       credential: 'openrelayproject',
-    },
-    // Backup Viagenie TURN Relay
-    {
-      urls: [
-        'turn:numb.viagenie.ca:3478',
-        'turn:numb.viagenie.ca:3478?transport=tcp',
-      ],
-      username: 'webrtc@live.com',
-      credential: 'webrtc',
     },
   ],
   iceCandidatePoolSize: 10,

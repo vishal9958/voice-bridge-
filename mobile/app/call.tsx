@@ -76,7 +76,11 @@ export default function CallScreen() {
   const { currentUser } = useAuth();
   const webrtcService = webrtcServiceRef.current;
 
+  const isRecordingStartingRef = useRef(false);
+
   const startRecording = useCallback(async () => {
+    if (recordingRef.current || isRecordingStartingRef.current) return;
+    isRecordingStartingRef.current = true;
     try {
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
@@ -85,12 +89,15 @@ export default function CallScreen() {
         shouldDuckAndroid: false,
         playThroughEarpieceAndroid: false,
       });
+      if (recordingRef.current) return;
       const { recording } = await Audio.Recording.createAsync(
         Audio.RecordingOptionsPresets.HIGH_QUALITY,
       );
       recordingRef.current = recording;
     } catch (e) {
       console.error('Failed to start recording', e);
+    } finally {
+      isRecordingStartingRef.current = false;
     }
   }, []);
 
