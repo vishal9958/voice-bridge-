@@ -9,23 +9,26 @@ import { getSocket } from './socket';
 
 const ICE_SERVERS_CONFIG = {
   iceServers: [
-    // ⚠️ CRITICAL: STUN has been completely removed as per your request!
-    // We are forcing TURN Relay ONLY for long-distance Jio/Airtel connections.
-
-    // 🔴 IMPORTANT: "openrelayproject" is a public test credential. 
-    // It is heavily rate-limited by metered.ca and often fails to generate candidates.
-    // Go to https://metered.ca, sign up for a free account (50GB free), 
-    // and replace 'YOUR_METERED_USERNAME' and 'YOUR_METERED_CREDENTIAL' below.
-
+    // 🚀 PRIVATE METERED.CA TURN SERVERS (STUN is removed as requested)
     {
-      urls: 'turn:openrelay.metered.ca:443',
-      username: 'openrelayproject', // REPLACE THIS
-      credential: 'openrelayproject', // REPLACE THIS
+      urls: 'turn:global.relay.metered.ca:80',
+      username: '238443ad93a54db4c909d4f4',
+      credential: 'LZXBXRZFqglHXaDw',
     },
     {
-      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-      username: 'openrelayproject', // REPLACE THIS
-      credential: 'openrelayproject', // REPLACE THIS
+      urls: 'turn:global.relay.metered.ca:80?transport=tcp',
+      username: '238443ad93a54db4c909d4f4',
+      credential: 'LZXBXRZFqglHXaDw',
+    },
+    {
+      urls: 'turn:global.relay.metered.ca:443',
+      username: '238443ad93a54db4c909d4f4',
+      credential: 'LZXBXRZFqglHXaDw',
+    },
+    {
+      urls: 'turns:global.relay.metered.ca:443?transport=tcp',
+      username: '238443ad93a54db4c909d4f4',
+      credential: 'LZXBXRZFqglHXaDw',
     },
   ],
   iceTransportPolicy: 'relay', // STABILITY FORCE: Strictly force WebRTC to use TURN Relay ONLY
