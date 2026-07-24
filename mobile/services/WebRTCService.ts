@@ -32,15 +32,15 @@ const ICE_SERVERS_CONFIG = {
     },
 
     // STUN Servers SECOND (for direct P2P NAT discovery when available)
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'stun:stun3.l.google.com:19302' },
-    { urls: 'stun:stun4.l.google.com:19302' },
-    { urls: 'stun:global.stun.twilio.com:3478' },
-    { urls: 'stun:stun.cloudflare.com:3478' },
-    { urls: 'stun:openrelay.metered.ca:80' },
-    { urls: 'stun:relay.metered.ca:80' },
+    // { urls: 'stun:stun.l.google.com:19302' },
+    // { urls: 'stun:stun1.l.google.com:19302' },
+    // { urls: 'stun:stun2.l.google.com:19302' },
+    // { urls: 'stun:stun3.l.google.com:19302' },
+    // { urls: 'stun:stun4.l.google.com:19302' },
+    // { urls: 'stun:global.stun.twilio.com:3478' },
+    // { urls: 'stun:stun.cloudflare.com:3478' },
+    // { urls: 'stun:openrelay.metered.ca:80' },
+    // { urls: 'stun:relay.metered.ca:80' },
   ],
   iceTransportPolicy: 'all',
   iceCandidatePoolSize: 10,
@@ -55,7 +55,7 @@ export class WebRTCService {
   private isClosed = false;
   private iceTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
-  constructor() {}
+  constructor() { }
 
   /**
    * Initializes local audio stream.
@@ -364,7 +364,7 @@ export class WebRTCService {
       this.iceTimeoutId = null;
     }
     if (this.peerConnection) {
-      try { this.peerConnection.close(); } catch (_) {}
+      try { this.peerConnection.close(); } catch (_) { }
       this.peerConnection = null;
     }
   }
@@ -384,13 +384,13 @@ export class WebRTCService {
       if (targetId && targetId.trim()) {
         socket.emit('end-call', { roomId, targetId });
       }
-    } catch (_) {}
+    } catch (_) { }
 
     // Stop microphone
     if (this.localStream) {
       try {
         this.localStream.getTracks().forEach((t) => t.stop());
-      } catch (_) {}
+      } catch (_) { }
       this.localStream = null;
     }
 
