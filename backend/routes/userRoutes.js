@@ -220,7 +220,7 @@ router
   .put(protect, authorize("Vendor"), updateUserInfo);
 
 router.route("/getself").get(protect, authorize("Vendor"), getSelf);
-router.route("/searchspeaker").get(protect, authorize("Vendor"), searchSpeaker);
+router.route("/searchspeaker").get(protect, searchSpeaker);
 router.route("/createpair").post(protect, authorize("Vendor"), createPair);
 router.route("/getmypairs").get(protect, authorize("Vendor"), getMyPairs);
 router

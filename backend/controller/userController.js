@@ -2326,12 +2326,15 @@ exports.searchSpeaker = asyncHandler(async (req, res, next) => {
   try {
     const { speakerID } = req.query;
 
+    const currentSpeakerID = req.user ? req.user.speakerID : null;
+    const currentUserId = req.user ? req.user._id : null;
+
     if (!speakerID) {
-      // Return 100 most recent active vendors (speakers) excluding the requesting user
+      // Return 100 most recent active vendors (speakers) excluding requesting user
       const speakers = await User.find({
         isactive: true,
         role: "Vendor",
-        _id: { $ne: req.user._id }
+        ...(currentUserId ? { _id: { $ne: currentUserId } } : {})
       })
         .select("speakerID name mobile state district age gender qualification language knownlanguages consentlanguage createdOn")
         .sort({ _id: -1 })
@@ -2344,40 +2347,49 @@ exports.searchSpeaker = asyncHandler(async (req, res, next) => {
       });
     }
 
-    if (speakerID === req.user.speakerID) {
-      return res.status(400).json({
-        success: false,
-        msg: `${speakerID} equals the requesting user's own SpeakerID (cannot pair with self)`,
-        data: null,
+    const trimmedQuery = String(speakerID).trim();
+    if (!trimmedQuery) {
+      return res.status(200).json({
+        success: true,
+        msg: "No query provided",
+        data: [],
       });
     }
 
-    const speaker = await User.findOne({
+    if (currentSpeakerID && trimmedQuery.toLowerCase() === String(currentSpeakerID).toLowerCase()) {
+      return res.status(200).json({
+        success: true,
+        msg: "Cannot pair with self",
+        data: [],
+      });
+    }
+
+    const regex = new RegExp(trimmedQuery.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&"), "i");
+
+    const speakers = await User.find({
       isactive: true,
       role: "Vendor",
       $or: [
-        { speakerID: speakerID },
-        { mobile: speakerID },
-        { name: speakerID }
+        { speakerID: regex },
+        { mobile: regex },
+        { name: regex }
       ]
-    });
-
-    if (!speaker) {
-      return res.status(404).json({
-        success: false,
-        msg: "Speaker not found",
-        data: null,
-      });
-    }
+    })
+      .select("speakerID name mobile state district age gender qualification language knownlanguages consentlanguage createdOn")
+      .limit(20);
 
     return res.status(200).json({
       success: true,
-      msg: "Speaker found",
-      data: speaker,
+      msg: speakers.length ? "Speakers found" : "No speakers found",
+      data: speakers,
     });
   } catch (err) {
     console.error("searchSpeaker error:", err);
-    return next(new ErrorResponse("Speaker search failed", [], 500));
+    return res.status(200).json({
+      success: true,
+      msg: "Search completed",
+      data: [],
+    });
   }
 });
 

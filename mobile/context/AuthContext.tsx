@@ -45,7 +45,7 @@ function makeId(): string {
   return Date.now().toString() + Math.random().toString(36).substring(2, 9);
 }
 
-const LIVE_BACKEND_URL = 'https://recordingapi.evaakya.com/api';
+const LIVE_BACKEND_URL = 'https://voice-bridge-106w.onrender.com/api';
 
 let globalJwtToken: string | null = null;
 
@@ -78,6 +78,11 @@ async function tryBackendFetch(endpoint: string, options: any = {}) {
     });
     clearTimeout(timeoutId);
     console.log(`[API Fetch] Status ${response.status} from ${LIVE_BACKEND_URL}${endpoint}`);
+    if (response.status === 401) {
+      console.log('[API Fetch] Stale or invalid token detected! Clearing token...');
+      globalJwtToken = null;
+      AsyncStorage.removeItem('vb_jwt_token').catch(() => {});
+    }
     if (response.ok || response.status === 200 || response.status === 201) {
       return response;
     }
