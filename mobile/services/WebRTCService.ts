@@ -82,6 +82,12 @@ export class WebRTCService {
     const pc: any = new RTCPeerConnection(ICE_SERVERS_CONFIG);
     this.peerConnection = pc;
 
+    try {
+      if (typeof pc.getConfiguration === 'function') {
+        console.log('[WebRTC Runtime Configuration]:', JSON.stringify(pc.getConfiguration()));
+      }
+    } catch (_) {}
+
     pc.onconnectionstatechange = () => {
       const state = pc.connectionState;
       console.log('[WebRTC] connectionState:', state);
@@ -100,6 +106,20 @@ export class WebRTCService {
           this.iceTimeoutId = null;
         }
       }
+    };
+
+    pc.onicegatheringstatechange = () => {
+      console.log('[WebRTC Gathering State]:', pc.iceGatheringState);
+    };
+
+    pc.onicecandidateerror = (event: any) => {
+      console.log('[WebRTC Candidate Error]:', {
+        errorCode: event?.errorCode,
+        errorText: event?.errorText,
+        url: event?.url,
+        address: event?.address,
+        port: event?.port,
+      });
     };
 
     // Listen for remote tracks
