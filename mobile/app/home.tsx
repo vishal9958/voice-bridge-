@@ -77,7 +77,7 @@ export default function HomeScreen() {
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [incomingCall, setIncomingCall] = useState<any>(null);
-  const results = searchUsers(searchQuery);
+  const results = searchQuery.trim() ? searchUsers(searchQuery) : [];
   const s = styles(colors);
 
   const handlePerformSearch = useCallback(() => {
@@ -298,9 +298,15 @@ export default function HomeScreen() {
         )}
         ListEmptyComponent={
           <View style={s.emptyState}>
-            <Feather name="users" size={36} color={colors.border} />
-            <Text style={s.emptyTitle}>No speakers found</Text>
-            <Text style={s.emptyDesc}>Try a different name, mobile, or ID</Text>
+            <Feather name={searchQuery.trim() ? 'user-x' : 'search'} size={36} color={colors.border} />
+            <Text style={s.emptyTitle}>
+              {searchQuery.trim() ? 'No speakers found' : 'Search for a speaker'}
+            </Text>
+            <Text style={s.emptyDesc}>
+              {searchQuery.trim()
+                ? 'Try a different name, mobile, or speaker ID'
+                : 'Enter a speaker name, mobile number, or ID and press Search'}
+            </Text>
           </View>
         }
       />

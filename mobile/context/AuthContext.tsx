@@ -69,7 +69,7 @@ async function tryBackendFetch(endpoint: string, options: any = {}) {
     console.log(`[API Fetch] Connecting to: ${LIVE_BACKEND_URL}${endpoint} (Bearer Token: ${token ? 'PRESENT' : 'MISSING'})`);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 35000); // 35s timeout — Render free tier cold start tak ke liye
 
     const response = await fetch(`${LIVE_BACKEND_URL}${endpoint}`, {
       ...options,

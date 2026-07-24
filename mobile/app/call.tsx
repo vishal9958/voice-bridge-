@@ -65,6 +65,7 @@ export default function CallScreen() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [webrtcState, setWebrtcState] = useState<string>('new');
   const [remoteStream, setRemoteStream] = useState<any>(null);
+  const callStartedRef = useRef(false); // prevent double-start
 
   const recordingRef = useRef<Audio.Recording | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -110,41 +111,50 @@ export default function CallScreen() {
           setWebrtcState(state);
 
           if (state === 'connected' || state === 'completed') {
-            setCallStatus('connected');
-            startRecording();
-            
-            if (!timerRef.current) {
-              timerRef.current = setInterval(() => {
-                setCallTimer((t) => {
-                  if (t >= MAX_DURATION_S) {
-                    handleDisconnect();
-                  }
-                  return t + 1;
-                });
-              }, 1000);
+            if (!callStartedRef.current) {
+              callStartedRef.current = true;
+              setCallStatus('connected');
+              startRecording();
+              if (!timerRef.current) {
+                timerRef.current = setInterval(() => {
+                  setCallTimer((t) => {
+                    if (t >= MAX_DURATION_S) handleDisconnect();
+                    return t + 1;
+                  });
+                }, 1000);
+              }
             }
           } else if (state === 'disconnected' || state === 'failed' || state === 'closed') {
-            console.log('[CallScreen] Call ended or disconnected by peer');
+            console.log('[CallScreen] ICE failed or peer disconnected, state:', state);
             if (timerRef.current) clearInterval(timerRef.current);
             setCallStatus('ended');
+            // Notify the other peer if we haven't started the call yet (ICE failure)
+            // or if we were connected and the peer left
+            const tId = host ? (participantId || '') : (hostId || '');
+            webrtcService.closeConnection(roomId, tId).catch(() => {});
+            // Navigate home after short delay
+            setTimeout(() => {
+              if (isActive) router.replace('/home');
+            }, 2000);
           }
         };
 
         const onRemote = (stream: any) => {
           if (!isActive) return;
-          console.log('Remote stream received');
+          console.log('[CallScreen] Remote stream received');
           setRemoteStream(stream);
-          setCallStatus('connected');
-          startRecording();
-          if (!timerRef.current) {
-            timerRef.current = setInterval(() => {
-              setCallTimer((t) => {
-                if (t >= MAX_DURATION_S) {
-                  handleDisconnect();
-                }
-                return t + 1;
-              });
-            }, 1000);
+          if (!callStartedRef.current) {
+            callStartedRef.current = true;
+            setCallStatus('connected');
+            startRecording();
+            if (!timerRef.current) {
+              timerRef.current = setInterval(() => {
+                setCallTimer((t) => {
+                  if (t >= MAX_DURATION_S) handleDisconnect();
+                  return t + 1;
+                });
+              }, 1000);
+            }
           }
         };
 
@@ -219,7 +229,7 @@ export default function CallScreen() {
   }
 
   async function handleDisconnect() {
-    if (callStatus !== 'connected' || isProcessing) return;
+    if (isProcessing) return;
 
     if (callTimer < MIN_DURATION_S) {
       Alert.alert(
