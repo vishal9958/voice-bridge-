@@ -9,7 +9,7 @@ import { getSocket } from './socket';
 
 const ICE_SERVERS_CONFIG = {
   iceServers: [
-    // 🚀 PRIVATE METERED.CA TURN SERVERS (STUN is removed as requested)
+    // 🚀 PRIVATE METERED.CA TURN SERVERS (MUST BE FIRST FOR LONG DISTANCE)
     {
       urls: 'turn:global.relay.metered.ca:80',
       username: '238443ad93a54db4c909d4f4',
@@ -30,8 +30,15 @@ const ICE_SERVERS_CONFIG = {
       username: '238443ad93a54db4c909d4f4',
       credential: 'LZXBXRZFqglHXaDw',
     },
+    // 🛡️ STUN FALLBACK (Crucial to keep ICE state machine 'checking' instead of instant fail)
+    {
+      urls: 'stun:stun.relay.metered.ca:80',
+    },
+    {
+      urls: 'stun:stun.l.google.com:19302',
+    }
   ],
-  iceTransportPolicy: 'relay', // STABILITY FORCE: Strictly force WebRTC to use TURN Relay ONLY
+  iceTransportPolicy: 'all', // CRITICAL: 'all' prevents WebRTC from giving up instantly in 200ms
   iceCandidatePoolSize: 10,
 };
 
